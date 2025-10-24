@@ -3,17 +3,225 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Расписание Вахт v6 (Final Fix)</title>
+    <title>Расписание Вахт</title>
     <style>
-        /* Стили остались те же */
-        body{background-color:#121212;color:#e0e0e0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;margin:0;padding:20px;line-height:1.6}.container{max-width:900px;margin:0 auto}header{text-align:center;margin-bottom:30px}header h1{color:#fff;font-size:2em;margin-bottom:5px}#lastUpdated{color:#03dac6;font-size:.9em;font-style:italic}.controls{background-color:#1e1e1e;padding:20px;border-radius:8px;margin-bottom:30px}.filters,.sorting{display:flex;gap:15px;margin-bottom:15px;flex-wrap:wrap}.filters input{flex-grow:1;padding:12px 15px;border-radius:8px;border:1px solid #333;background-color:#2a2a2a;color:#e0e0e0;font-size:1em}.filters input:focus{outline:0;border-color:#4a90e2}.sorting button{background-color:#333;color:#e0e0e0;border:none;padding:10px 15px;border-radius:5px;cursor:pointer;transition:background-color .2s}.sorting button.active{background-color:#4a90e2;color:#fff}.route-card{background-color:#1e1e1e;border-left:4px solid #333;border-radius:0 8px 8px 0;padding:20px;margin-bottom:20px;transition:transform .2s ease,box-shadow .2s ease;display:block}.route-card.hidden{display:none}.route-card:hover{transform:translateY(-5px);box-shadow:0 4px 20px rgba(0,0,0,.6);border-left-color:#4a90e2}.card-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:15px}.card-header .time{font-size:1.6em;font-weight:700;color:#fff}.bus-list{display:flex;flex-wrap:wrap;gap:8px}.bus-tag{background-color:#4a90e2;color:#fff;padding:5px 12px;border-radius:15px;font-weight:700;font-size:.9em}.route-card p{margin:8px 0;color:#ccc}.route-card .label{font-weight:700;color:#a0a0a0}.error-message{text-align:center;color:#ff6b6b;background-color:#2a2a2a;padding:20px;border-radius:8px;}
+        /* Общие стили */
+        :root {
+            --bg-color: #121212;
+            --surface-color: #1e1e1e;
+            --primary-color: #03dac6;
+            --secondary-color: #bb86fc;
+            --text-color: #e0e0e0;
+            --text-secondary-color: #a0a0a0;
+            --border-color: #333;
+        }
+
+        *, *::before, *::after {
+            box-sizing: border-box;
+        }
+
+        body {
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+            margin: 0;
+            padding: 20px 15px;
+            line-height: 1.6;
+        }
+
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+        }
+
+        /* Заголовок */
+        header {
+            text-align: center;
+            margin-bottom: 30px;
+        }
+        header h1 {
+            color: #fff;
+            font-size: 1.8em; /* Немного уменьшили для баланса */
+            margin-bottom: 5px;
+            font-weight: 700;
+        }
+        #lastUpdated {
+            color: var(--primary-color);
+            font-size: 0.9em;
+        }
+
+        /* Панель управления */
+        .controls {
+            background-color: var(--surface-color);
+            padding: 20px;
+            border-radius: 12px;
+            margin-bottom: 30px;
+            border: 1px solid var(--border-color);
+        }
+        .filters {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 15px;
+            margin-bottom: 20px;
+        }
+        .filter-full-width {
+            grid-column: 1 / -1;
+        }
+        .filters input {
+            width: 100%;
+            padding: 12px 15px;
+            border-radius: 8px;
+            border: 1px solid var(--border-color);
+            background-color: #2a2a2a;
+            color: var(--text-color);
+            font-size: 1em;
+            transition: border-color 0.2s, box-shadow 0.2s;
+        }
+        .filters input::placeholder { color: var(--text-secondary-color); }
+        .filters input:focus {
+            outline: 0;
+            border-color: var(--secondary-color);
+            box-shadow: 0 0 0 3px rgba(187, 134, 252, 0.2);
+        }
+
+        .sorting {
+            display: flex;
+            gap: 10px;
+            align-items: center;
+            flex-wrap: wrap;
+        }
+        .sorting span {
+             color: var(--text-secondary-color);
+             font-size: 0.9em;
+        }
+        .sorting button {
+            background-color: #333;
+            color: var(--text-color);
+            border: none;
+            padding: 8px 15px;
+            border-radius: 20px;
+            cursor: pointer;
+            transition: background-color 0.2s, color 0.2s;
+            font-weight: 500;
+        }
+        .sorting button.active {
+            background-color: var(--secondary-color);
+            color: #121212;
+            font-weight: 700;
+        }
+
+        /* Дизайн карточки маршрута */
+        .route-card {
+            background-color: var(--surface-color);
+            border-radius: 12px;
+            padding: 20px;
+            margin-bottom: 20px;
+            border: 1px solid var(--border-color);
+            transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
+            display: block;
+        }
+        .route-card.hidden { display: none; }
+        .route-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 8px 25px rgba(0, 0, 0, 0.5);
+            border-color: var(--secondary-color);
+        }
+
+        .card-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            margin-bottom: 20px;
+            border-bottom: 1px solid var(--border-color);
+            padding-bottom: 15px;
+        }
+        .card-header .time {
+            font-size: 2.2em;
+            font-weight: 700;
+            color: var(--primary-color);
+            line-height: 1;
+        }
+        .bus-list { display: flex; flex-wrap: wrap; gap: 8px; justify-content: flex-end; }
+        .bus-tag {
+            background-color: var(--secondary-color);
+            color: #121212;
+            padding: 5px 12px;
+            border-radius: 15px;
+            font-weight: 700;
+            font-size: 0.9em;
+        }
+
+        /* Визуализация маршрута */
+        .route-path { display: flex; gap: 15px; }
+        .path-visual { display: flex; flex-direction: column; align-items: center; }
+        .path-visual .icon { width: 24px; height: 24px; fill: var(--text-secondary-color); flex-shrink: 0; }
+        .path-visual .icon.mid-icon { width: 16px; height: 16px; margin: 4px 0; fill: #555; }
+        .path-line {
+            width: 2px;
+            min-height: 20px; /* Минимальная длина линии */
+            flex-grow: 1;
+            background: linear-gradient(to bottom, var(--secondary-color), var(--primary-color));
+            opacity: 0.3;
+        }
+        .path-details { display: flex; flex-direction: column; flex-grow: 1; justify-content: space-between; }
+        .path-point { padding: 2px 0; }
+        .path-point .label {
+            font-size: 0.8em;
+            color: var(--text-secondary-color);
+            text-transform: uppercase;
+            font-weight: 500;
+        }
+        .path-point .location {
+            font-size: 1.1em;
+            font-weight: 500;
+            color: var(--text-color);
+        }
+        /* Скрываем промежуточные лэйблы для чистоты */
+        .path-point.is-mid .label { display: none; }
+
+        .route-path { display: flex; flex-direction: column; gap: 6px; }
+        .stop-row { display: grid; grid-template-columns: 28px 1fr; align-items: start; gap: 12px; padding: 4px 6px; border-radius: 8px; transition: background-color 0.2s ease; }
+        .stop-row:hover { background-color: rgba(187, 134, 252, 0.08); }
+        .stop-visual { display: flex; flex-direction: column; align-items: center; }
+        .stop-icon { width: 14px; height: 14px; border-radius: 50%; border: 2px solid #555; background: #222; box-shadow: 0 0 0 2px var(--surface-color); }
+        .stop-icon.start { border-color: var(--secondary-color); background: var(--secondary-color); }
+        .stop-icon.end { border-color: var(--primary-color); background: var(--primary-color); }
+        .stop-icon.mid { border-color: #666; background: #2a2a2a; }
+        .v-line { width: 2px; flex: 1; background: linear-gradient(to bottom, var(--secondary-color), var(--primary-color)); opacity: 0.3; margin-top: 4px; }
+        .stop-details .label { font-size: 0.75em; color: var(--text-secondary-color); text-transform: uppercase; font-weight: 600; }
+        .stop-details .location { font-size: 1.05em; font-weight: 700; color: var(--text-color); }
+        .stop-row.is-mid .label { display: none; }
+
+        /* Футер карточки */
+        .card-footer {
+            margin-top: 15px;
+            padding-top: 15px;
+            border-top: 1px solid var(--border-color);
+        }
+        .card-footer .label { font-weight: 700; color: var(--text-secondary-color); }
+        .card-footer p { margin: 0; color: var(--text-color); }
+
+        /* Сообщения */
+        .error-message {
+            text-align: center; color: #ff8a80; background-color: rgba(255, 138, 128, 0.1);
+            padding: 20px; border-radius: 8px; border: 1px solid rgba(255, 138, 128, 0.3);
+        }
+
+        /* Адаптивность */
+        @media (max-width: 600px) {
+            body { padding: 10px; }
+            header h1 { font-size: 1.5em; }
+            .filters { grid-template-columns: 1fr; }
+            .card-header { flex-direction: column; align-items: flex-start; gap: 10px; }
+            .card-header .time { font-size: 1.8em; }
+        }
     </style>
 </head>
 <body>
 
     <div class="container">
         <header>
-            <h1>Расписание автобусов</h1>
+            <h1 id="scheduleDate">Расписание автобусов</h1>
             <p id="lastUpdated">Загрузка данных...</p>
         </header>
 
@@ -21,12 +229,12 @@
             <div class="filters">
                 <input type="text" id="fromInput" placeholder="Откуда...">
                 <input type="text" id="toInput" placeholder="Куда...">
-                <input type="text" id="generalFilter" placeholder="Номер автобуса, описание...">
+                <input type="text" id="generalFilter" class="filter-full-width" placeholder="Номер автобуса, описание...">
             </div>
             <div class="sorting">
-                <span>Сортировать по:</span>
-                <button id="sortByTimeBtn" class="active">Времени</button>
-                <button id="sortByBusBtn">Номеру автобуса</button>
+                <span>Сортировать:</span>
+                <button id="sortByTimeBtn" class="active">По времени</button>
+                <button id="sortByBusBtn">По номеру автобуса</button>
             </div>
         </div>
 
@@ -38,173 +246,186 @@
     <script>
     document.addEventListener('DOMContentLoaded', () => {
 
-        // --- 1. Функция для "получения" и парсинга данных с сайта 3aic.ru ---
         async function fetchAndParseData() {
             const targetUrl = 'http://3aic.ru/';
-            // --- ИЗМЕНЕНИЕ 1: Используем другой, более надежный CORS-прокси ---
             const proxyUrl = 'https://cors-anywhere.herokuapp.com/';
-            
-            console.log("Запрос данных с", targetUrl, "через прокси...");
             const response = await fetch(`${proxyUrl}${targetUrl}`);
-
-            if (!response.ok) {
-                throw new Error(`Ошибка сети: ${response.status} ${response.statusText}. Возможно, нужно активировать демо-доступ к прокси.`);
-            }
-
-            // --- ИЗМЕНЕНИЕ 2: Возвращаемся к простому .text() ---
-            // Новый прокси корректно передает заголовок о кодировке (windows-1251),
-            // поэтому браузер сам правильно раскодирует текст.
+            if (!response.ok) throw new Error(`Ошибка сети: ${response.status}.`);
             const htmlText = await response.text();
-
-            console.log("HTML получен, начинаем парсинг...");
             
             const parser = new DOMParser();
             const doc = parser.parseFromString(htmlText, 'text/html');
-
             const scheduleData = [];
             const rows = doc.querySelectorAll('table tr');
 
             rows.forEach((row, index) => {
-                if (index === 0) return; // Пропускаем заголовок
-
+                if (index === 0) return;
                 const cells = row.querySelectorAll('td');
                 if (cells.length >= 4) {
-                    // --- ИЗМЕНЕНИЕ 3: Исправлен порядок ячеек ---
                     const time = cells[0].textContent.trim();
-                    const route = cells[1].textContent.trim();      // Ячейка [1] - это Маршрут
-                    const busesText = cells[2].textContent.trim();  // Ячейка [2] - это Номера автобусов
+                    const route = cells[1].textContent.trim();
+                    const busesText = cells[2].textContent.trim();
                     const description = cells[3].textContent.trim();
-                    
-                    if (!time) return; // Пропускаем пустые строки
-
-                    // Убираем скобки и лишние символы из номеров автобусов, разделяем
+                    if (!time) return;
                     const buses = busesText.replace(/[()]/g, '').split(/[\s,]+/).filter(b => b);
-
                     scheduleData.push({
-                        time,
-                        buses,
-                        route,
-                        description,
+                        time, buses, route, description,
                         keywords: `${time} ${buses.join(' ')} ${route} ${description}`.toLowerCase()
                     });
                 }
             });
-            console.log("Парсинг завершен. Найдено записей:", scheduleData.length);
             return scheduleData;
         }
 
-        // --- Функция для отрисовки карточек (без изменений) ---
         function renderCards(data) {
             const container = document.getElementById('scheduleContainer');
             container.innerHTML = '';
             
             if (data.length === 0) {
-                 container.innerHTML = `<p class="error-message">Не удалось найти ни одного маршрута. Попробуйте изменить фильтры.</p>`;
+                 container.innerHTML = `<p class="error-message">Не удалось найти ни одного маршрута.</p>`;
                  return;
             }
 
             data.forEach(item => {
-                const routeNormalized = item.route.toLowerCase().replace(/→/g, '');
-                const keywordsNormalized = item.keywords;
                 const busTags = item.buses.map(bus => `<span class="bus-tag">№ ${bus}</span>`).join('');
+                
+                const stops = item.route
+                    .split('→')
+                    .flatMap(part => part.split(' - '))
+                    .map(stop => stop.trim())
+                    .filter(stop => stop);
+                let rowsHTML = '';
+                stops.forEach((stop, index) => {
+                    const isFirst = index === 0;
+                    const isLast = index === stops.length - 1;
+                    const label = isFirst ? 'Отправление' : (isLast ? 'Прибытие' : 'Промежуточная');
+                    const iconClass = isFirst ? 'start' : (isLast ? 'end' : 'mid');
+                    const pointClass = isFirst || isLast ? '' : 'is-mid';
+                    const lineHTML = !isLast ? `<div class="v-line"></div>` : '';
+                    rowsHTML += `
+                        <div class="stop-row ${pointClass}">
+                            <div class="stop-visual">
+                                <div class="stop-icon ${iconClass}"></div>
+                                ${lineHTML}
+                            </div>
+                            <div class="stop-details">
+                                <div class="label">${label}</div>
+                                <div class="location">${stop}</div>
+                            </div>
+                        </div>`;
+                });
+                if (stops.length < 1) {
+                    rowsHTML = `
+                        <div class="stop-row">
+                            <div class="stop-visual">
+                                <div class="stop-icon start"></div>
+                            </div>
+                            <div class="stop-details">
+                                <div class="location">${item.route}</div>
+                            </div>
+                        </div>`;
+                }
 
                 const cardHTML = `
-                    <article class="route-card" data-time="${item.time}" data-bus="${item.buses[0] || ''}" data-route="${routeNormalized}" data-keywords="${keywordsNormalized}">
+                    <article class="route-card" data-time="${item.time}" data-bus="${item.buses[0] || ''}" data-route="${item.route.toLowerCase()}" data-keywords="${item.keywords}">
                         <div class="card-header">
                             <span class="time">${item.time}</span>
-                            <div class="bus-list">${busTags}</div>
+                            <div class="bus-list">${busTags.length > 0 ? busTags : ''}</div>
                         </div>
-                        <p><span class="label">Маршрут:</span> ${item.route}</p>
-                        <p><span class="label">Описание:</span> ${item.description}</p>
-                    </article>
-                `;
+
+                        <div class="route-path">${rowsHTML}</div>
+
+                        ${item.description ? `
+                        <div class="card-footer">
+                            <p><span class="label">Описание:</span> ${item.description}</p>
+                        </div>` : ''}
+                    </article>`;
                 container.insertAdjacentHTML('beforeend', cardHTML);
             });
         }
         
-        // --- Основная функция инициализации приложения (без изменений) ---
         async function initializeApp() {
+            const scheduleDateElem = document.getElementById('scheduleDate');
             const lastUpdatedElem = document.getElementById('lastUpdated');
             const scheduleContainer = document.getElementById('scheduleContainer');
+
+            // --- НОВОЕ: Установка даты и времени ---
+            const now = new Date();
+            const dateString = now.toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit' });
+            const timeString = now.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' });
+            scheduleDateElem.textContent = `Расписание автобусов на: ${dateString}`;
+            lastUpdatedElem.textContent = `Последнее обновление: ${timeString}`;
 
             try {
                 const scheduleData = await fetchAndParseData();
                 setupControls(scheduleData);
-                const now = new Date();
-                lastUpdatedElem.textContent = `Данные с 3aic.ru актуальны на: ${now.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' })}`;
             } catch(error) {
-                console.error("Не удалось загрузить и обработать данные:", error);
+                console.error("Ошибка загрузки:", error);
                 lastUpdatedElem.textContent = 'Ошибка загрузки данных.';
-                scheduleContainer.innerHTML = `<div class="error-message">Не удалось загрузить расписание. Возможно, сайт-источник или CORS-прокси недоступны. Попробуйте обновить страницу позже.<br><small>Если проблема в прокси, перейдите по <a href="https://cors-anywhere.herokuapp.com/" target="_blank">этой ссылке</a>, нажмите на кнопку и вернитесь на эту страницу.</small></div>`;
+                scheduleContainer.innerHTML = `<div class="error-message">Не удалось загрузить расписание. Сайт-источник или CORS-прокси недоступны.<br><small>Если проблема в прокси, перейдите по <a href="https://cors-anywhere.herokuapp.com/" target="_blank" style="color: #bb86fc;">этой ссылке</a>, нажмите кнопку и вернитесь.</small></div>`;
             }
         }
-
+        
         function setupControls(data) {
             const fromInput = document.getElementById('fromInput');
             const toInput = document.getElementById('toInput');
             const generalFilter = document.getElementById('generalFilter');
             const sortByTimeBtn = document.getElementById('sortByTimeBtn');
             const sortByBusBtn = document.getElementById('sortByBusBtn');
-            const scheduleContainer = document.getElementById('scheduleContainer');
+            let currentData = [...data];
 
-            renderCards(data); // Первичная отрисовка
-            let cards = Array.from(scheduleContainer.querySelectorAll('.route-card'));
-
-            function filterAndSort() {
+            function applyFilters() {
                 const fromValue = fromInput.value.toLowerCase().trim();
                 const toValue = toInput.value.toLowerCase().trim();
                 const generalValue = generalFilter.value.toLowerCase().trim();
-                let visibleCount = 0;
+                
+                const filteredData = data.filter(item => {
+                    const route = item.route.toLowerCase();
+                    const keywords = item.keywords;
+                    if (generalValue && !keywords.includes(generalValue)) return false;
 
-                cards.forEach(card => {
-                    const route = card.dataset.route;
-                    const keywords = card.dataset.keywords;
-                    let isVisible = true;
-                    if (generalValue && !keywords.includes(generalValue)) isVisible = false;
-                    const fromIndex = route.indexOf(fromValue);
-                    if (fromValue && fromIndex === -1) isVisible = false;
-                    const toIndex = route.indexOf(toValue);
+                    const stops = route.split(/→| - /).map(s => s.trim());
+                    const fromIndex = stops.findIndex(s => s.includes(fromValue));
+                    if (fromValue && fromIndex === -1) return false;
+                    
+                    const toIndex = stops.findIndex(s => s.includes(toValue));
                     if (toValue) {
-                        if (toIndex === -1) isVisible = false;
-                        if (fromValue && fromIndex !== -1 && toIndex <= fromIndex) isVisible = false;
+                        if (toIndex === -1) return false;
+                        if (fromValue && toIndex <= fromIndex) return false;
                     }
-                    card.classList.toggle('hidden', !isVisible);
-                    if (isVisible) visibleCount++;
+                    return true;
                 });
-
-                const existingMessage = scheduleContainer.querySelector('.temp-message');
-                if (existingMessage) existingMessage.remove();
-                if (visibleCount === 0) {
-                     scheduleContainer.insertAdjacentHTML('beforeend', `<p class="error-message temp-message">По вашему запросу ничего не найдено.</p>`);
-                }
+                
+                currentData = filteredData;
+                sortAndRender();
             }
 
-            function sortCards(criteria) {
-                let sortedData = [...data].sort((a, b) => {
-                    if (criteria === 'time') return a.time.localeCompare(b.time);
-                    if (criteria === 'bus') return (parseInt(a.buses[0]) || 9999) - (parseInt(b.buses[0]) || 9999);
-                    return 0;
-                });
-                renderCards(sortedData);
-                cards = Array.from(scheduleContainer.querySelectorAll('.route-card'));
-                filterAndSort();
+            function sortAndRender(criteria) {
+                const activeSort = criteria || (sortByTimeBtn.classList.contains('active') ? 'time' : 'bus');
+
+                if (activeSort === 'time') {
+                    currentData.sort((a, b) => a.time.localeCompare(b.time, 'kn', { numeric: true }));
+                } else if (activeSort === 'bus') {
+                    currentData.sort((a, b) => (parseInt(a.buses[0]) || 9999) - (parseInt(b.buses[0]) || 9999));
+                }
+                renderCards(currentData);
             }
             
-            [fromInput, toInput, generalFilter].forEach(input => input.addEventListener('input', filterAndSort));
+            [fromInput, toInput, generalFilter].forEach(input => input.addEventListener('input', applyFilters));
             
             sortByTimeBtn.addEventListener('click', () => {
-                sortCards('time');
                 sortByTimeBtn.classList.add('active');
                 sortByBusBtn.classList.remove('active');
+                sortAndRender('time');
             });
 
             sortByBusBtn.addEventListener('click', () => {
-                sortCards('bus');
                 sortByBusBtn.classList.add('active');
                 sortByTimeBtn.classList.remove('active');
+                sortAndRender('bus');
             });
             
-            sortCards('time'); // Первичная сортировка
+            applyFilters();
         }
 
         initializeApp();
