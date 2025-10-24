@@ -1,0 +1,229 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Расписание Вахт v4 (Live Data)</title>
+    <style>
+        /* Стили остались те же, что и в прошлой версии для краткости */
+        body{background-color:#121212;color:#e0e0e0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;margin:0;padding:20px;line-height:1.6}.container{max-width:900px;margin:0 auto}header{text-align:center;margin-bottom:30px}header h1{color:#fff;font-size:2em;margin-bottom:5px}#lastUpdated{color:#03dac6;font-size:.9em;font-style:italic}.controls{background-color:#1e1e1e;padding:20px;border-radius:8px;margin-bottom:30px}.filters,.sorting{display:flex;gap:15px;margin-bottom:15px;flex-wrap:wrap}.filters input{flex-grow:1;padding:12px 15px;border-radius:8px;border:1px solid #333;background-color:#2a2a2a;color:#e0e0e0;font-size:1em}.filters input:focus{outline:0;border-color:#4a90e2}.sorting button{background-color:#333;color:#e0e0e0;border:none;padding:10px 15px;border-radius:5px;cursor:pointer;transition:background-color .2s}.sorting button.active{background-color:#4a90e2;color:#fff}.route-card{background-color:#1e1e1e;border-left:4px solid #333;border-radius:0 8px 8px 0;padding:20px;margin-bottom:20px;transition:transform .2s ease,box-shadow .2s ease;display:block}.route-card.hidden{display:none}.route-card:hover{transform:translateY(-5px);box-shadow:0 4px 20px rgba(0,0,0,.6);border-left-color:#4a90e2}.card-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:15px}.card-header .time{font-size:1.6em;font-weight:700;color:#fff}.bus-list{display:flex;flex-wrap:wrap;gap:8px}.bus-tag{background-color:#4a90e2;color:#fff;padding:5px 12px;border-radius:15px;font-weight:700;font-size:.9em}.route-card p{margin:8px 0;color:#ccc}.route-card .label{font-weight:700;color:#a0a0a0}.error-message{text-align:center;color:#ff6b6b;background-color:#2a2a2a;padding:20px;border-radius:8px;}
+    </style>
+</head>
+<body>
+
+    <div class="container">
+        <header>
+            <h1>Расписание автобусов</h1>
+            <p id="lastUpdated">Загрузка данных...</p>
+        </header>
+
+        <div class="controls">
+            <div class="filters">
+                <input type="text" id="fromInput" placeholder="Откуда...">
+                <input type="text" id="toInput" placeholder="Куда...">
+                <input type="text" id="generalFilter" placeholder="Номер автобуса, описание...">
+            </div>
+            <div class="sorting">
+                <span>Сортировать по:</span>
+                <button id="sortByTimeBtn" class="active">Времени</button>
+                <button id="sortByBusBtn">Номеру автобуса</button>
+            </div>
+        </div>
+
+        <main id="scheduleContainer">
+            <!-- Карточки будут динамически добавлены сюда -->
+        </main>
+    </div>
+
+    <script>
+    document.addEventListener('DOMContentLoaded', () => {
+
+        // --- 1. Функция для "получения" и парсинга данных с сайта 3aic.ru ---
+        async function fetchAndParseData() {
+            // URL сайта с расписанием
+            const targetUrl = 'http://3aic.ru/';
+            // Используем CORS-прокси, чтобы обойти ограничения безопасности браузера
+            const proxyUrl = 'https://api.allorigins.win/raw?url=';
+            
+            console.log("Запрос данных с", targetUrl);
+            const response = await fetch(`${proxyUrl}${encodeURIComponent(targetUrl)}`);
+
+            if (!response.ok) {
+                throw new Error(`Ошибка сети: ${response.status} ${response.statusText}`);
+            }
+
+            const htmlText = await response.text();
+            console.log("HTML получен, начинаем парсинг...");
+
+            // Используем DOMParser для преобразования текста HTML в DOM-структуру
+            const parser = new DOMParser();
+            const doc = parser.parseFromString(htmlText, 'text/html');
+
+            const scheduleData = [];
+            // Находим все строки <tr> в таблице. Селектор может понадобиться уточнить, если структура сайта изменится
+            const rows = doc.querySelectorAll('table tr');
+
+            rows.forEach((row, index) => {
+                // Пропускаем заголовок таблицы (первую строку)
+                if (index === 0) return;
+
+                const cells = row.querySelectorAll('td');
+                if (cells.length >= 4) { // Убедимся, что в строке достаточно ячеек
+                    const time = cells[0].textContent.trim();
+                    const busesText = cells[1].textContent.trim();
+                    const route = cells[2].textContent.trim();
+                    const description = cells[3].textContent.trim();
+                    
+                    // Преобразуем номера автобусов в массив
+                    const buses = busesText.split(/[\s,]+/).filter(b => b); // Разделяем по пробелам или запятым и убираем пустые элементы
+
+                    scheduleData.push({
+                        time,
+                        buses,
+                        route,
+                        description,
+                        // Составляем ключевые слова для поиска из всех данных
+                        keywords: `${time} ${buses.join(' ')} ${route} ${description}`.toLowerCase()
+                    });
+                }
+            });
+            console.log("Парсинг завершен. Найдено записей:", scheduleData.length);
+            return scheduleData;
+        }
+
+
+        // --- 2. Функция для отрисовки карточек ---
+        function renderCards(data) {
+            const container = document.getElementById('scheduleContainer');
+            container.innerHTML = ''; // Очищаем контейнер перед отрисовкой
+            
+            if (data.length === 0) {
+                 container.innerHTML = `<p class="error-message">Не удалось найти ни одного маршрута. Попробуйте изменить фильтры.</p>`;
+                 return;
+            }
+
+            data.forEach(item => {
+                const routeNormalized = item.route.toLowerCase().replace(/→/g, '');
+                const keywordsNormalized = item.keywords;
+                
+                const busTags = item.buses.map(bus => `<span class="bus-tag">№ ${bus}</span>`).join('');
+
+                const cardHTML = `
+                    <article class="route-card" data-time="${item.time}" data-bus="${item.buses[0] || ''}" data-route="${routeNormalized}" data-keywords="${keywordsNormalized}">
+                        <div class="card-header">
+                            <span class="time">${item.time}</span>
+                            <div class="bus-list">${busTags}</div>
+                        </div>
+                        <p><span class="label">Маршрут:</span> ${item.route}</p>
+                        <p><span class="label">Описание:</span> ${item.description}</p>
+                    </article>
+                `;
+                container.insertAdjacentHTML('beforeend', cardHTML);
+            });
+        }
+        
+        // --- 3. Основная функция инициализации приложения ---
+        async function initializeApp() {
+            // Элементы DOM
+            const fromInput = document.getElementById('fromInput');
+            const toInput = document.getElementById('toInput');
+            const generalFilter = document.getElementById('generalFilter');
+            const sortByTimeBtn = document.getElementById('sortByTimeBtn');
+            const sortByBusBtn = document.getElementById('sortByBusBtn');
+            const lastUpdatedElem = document.getElementById('lastUpdated');
+            const scheduleContainer = document.getElementById('scheduleContainer');
+
+            let scheduleData = [];
+            let cards = [];
+
+            try {
+                // Получаем и отрисовываем данные
+                scheduleData = await fetchAndParseData();
+                renderCards(scheduleData);
+                cards = Array.from(scheduleContainer.querySelectorAll('.route-card'));
+                 const now = new Date();
+                 lastUpdatedElem.textContent = `Данные с 3aic.ru актуальны на: ${now.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' })}`;
+
+            } catch(error) {
+                console.error("Не удалось загрузить и обработать данные:", error);
+                lastUpdatedElem.textContent = 'Ошибка загрузки данных.';
+                scheduleContainer.innerHTML = `<div class="error-message">Не удалось загрузить расписание. Возможно, сайт-источник или CORS-прокси недоступны. Попробуйте обновить страницу позже.<br><small>${error.message}</small></div>`;
+                return; // Прекращаем выполнение, если данные не загрузились
+            }
+
+
+            // Логика фильтрации
+            function filterAndSort() {
+                const fromValue = fromInput.value.toLowerCase().trim();
+                const toValue = toInput.value.toLowerCase().trim();
+                const generalValue = generalFilter.value.toLowerCase().trim();
+
+                let visibleCount = 0;
+                cards.forEach(card => {
+                    const route = card.dataset.route;
+                    const keywords = card.dataset.keywords;
+                    let isVisible = true;
+
+                    if (generalValue && !keywords.includes(generalValue)) isVisible = false;
+                    
+                    const fromIndex = route.indexOf(fromValue);
+                    if (fromValue && fromIndex === -1) isVisible = false;
+
+                    const toIndex = route.indexOf(toValue);
+                    if (toValue) {
+                        if (toIndex === -1) isVisible = false;
+                        if (fromValue && fromIndex !== -1 && toIndex <= fromIndex) isVisible = false;
+                    }
+                    
+                    card.classList.toggle('hidden', !isVisible);
+                    if (isVisible) visibleCount++;
+                });
+
+                // Показываем сообщение, если по фильтрам ничего не найдено
+                const noResultsMessage = scheduleContainer.querySelector('.error-message');
+                if (visibleCount === 0 && !noResultsMessage) {
+                     scheduleContainer.insertAdjacentHTML('beforeend', `<p class="error-message temp-message">По вашему запросу ничего не найдено.</p>`);
+                } else if(visibleCount > 0 && noResultsMessage) {
+                    const tempMessage = scheduleContainer.querySelector('.temp-message');
+                    if (tempMessage) tempMessage.remove();
+                }
+            }
+
+            // Логика сортировки
+            function sortCards(criteria) {
+                let sorted = [...cards].sort((a, b) => {
+                    if (criteria === 'time') return a.dataset.time.localeCompare(b.dataset.time);
+                    if (criteria === 'bus') return (parseInt(a.dataset.bus) || 9999) - (parseInt(b.dataset.bus) || 9999);
+                    return 0;
+                });
+                sorted.forEach(card => scheduleContainer.appendChild(card));
+                cards = Array.from(scheduleContainer.querySelectorAll('.route-card'));
+                filterAndSort(); 
+            }
+            
+            // Навешиваем обработчики
+            [fromInput, toInput, generalFilter].forEach(input => input.addEventListener('input', filterAndSort));
+            
+            sortByTimeBtn.addEventListener('click', () => {
+                sortCards('time');
+                sortByTimeBtn.classList.add('active');
+                sortByBusBtn.classList.remove('active');
+            });
+
+            sortByBusBtn.addEventListener('click', () => {
+                sortCards('bus');
+                sortByBusBtn.classList.add('active');
+                sortByTimeBtn.classList.remove('active');
+            });
+            
+            // Первичная сортировка
+            sortCards('time');
+        }
+
+        // Запускаем приложение
+        initializeApp();
+    });
+    </script>
+
+</body>
+</html>
