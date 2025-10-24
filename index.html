@@ -238,199 +238,197 @@
             </div>
         </div>
 
-        <main id="scheduleContainer">
-            <!-- Карточки будут динамически добавлены сюда -->
-        </main>
+        <main id="scheduleContainer"></main>
+
+        <script>
+        document.addEventListener('DOMContentLoaded', () => {
+
+            async function fetchAndParseData() {
+                const targetUrl = 'http://3aic.ru/';
+                const proxyUrl = 'https://api.allorigins.win/raw?url=';
+                const response = await fetch(`${proxyUrl}${encodeURIComponent(targetUrl)}`);
+                if (!response.ok) throw new Error(`Ошибка сети: ${response.status}.`);
+                const htmlText = await response.text();
+
+                const parser = new DOMParser();
+                const doc = parser.parseFromString(htmlText, 'text/html');
+                const scheduleData = [];
+                const rows = doc.querySelectorAll('table tr');
+
+                rows.forEach((row, index) => {
+                    if (index === 0) return;
+                    const cells = row.querySelectorAll('td');
+                    if (cells.length >= 4) {
+                        const time = cells[0].textContent.trim();
+                        const route = cells[1].textContent.trim();
+                        const busesText = cells[2].textContent.trim();
+                        const description = cells[3].textContent.trim();
+                        if (!time) return;
+                        const buses = busesText.replace(/[()]/g, '').split(/[\s,]+/).filter(b => b);
+                        scheduleData.push({
+                            time, buses, route, description,
+                            keywords: `${time} ${buses.join(' ')} ${route} ${description}`.toLowerCase()
+                        });
+                    }
+                });
+                return scheduleData;
+            }
+
+            function renderCards(data) {
+                const container = document.getElementById('scheduleContainer');
+                container.innerHTML = '';
+                
+                if (data.length === 0) {
+                     container.innerHTML = `<p class="error-message">Не удалось найти ни одного маршрута.</p>`;
+                     return;
+                }
+
+                data.forEach(item => {
+                    const busTags = item.buses.map(bus => `<span class="bus-tag">№ ${bus}</span>`).join('');
+                    
+                    const stops = item.route
+                        .split('→')
+                        .flatMap(part => part.split(' - '))
+                        .map(stop => stop.trim())
+                        .filter(stop => stop);
+                    let rowsHTML = '';
+                    stops.forEach((stop, index) => {
+                        const isFirst = index === 0;
+                        const isLast = index === stops.length - 1;
+                        const label = isFirst ? 'Отправление' : (isLast ? 'Прибытие' : 'Промежуточная');
+                        const iconClass = isFirst ? 'start' : (isLast ? 'end' : 'mid');
+                        const pointClass = isFirst || isLast ? '' : 'is-mid';
+                        const lineHTML = !isLast ? `<div class=\"v-line\"></div>` : '';
+                        rowsHTML += `
+                            <div class="stop-row ${pointClass}">
+                                <div class="stop-visual">
+                                    <div class="stop-icon ${iconClass}"></div>
+                                    ${lineHTML}
+                                </div>
+                                <div class="stop-details">
+                                    <div class="label">${label}</div>
+                                    <div class="location">${stop}</div>
+                                </div>
+                            </div>`;
+                    });
+                    if (stops.length < 1) {
+                        rowsHTML = `
+                            <div class="stop-row">
+                                <div class="stop-visual">
+                                    <div class="stop-icon start"></div>
+                                </div>
+                                <div class="stop-details">
+                                    <div class="location">${item.route}</div>
+                                </div>
+                            </div>`;
+                    }
+
+                    const cardHTML = `
+                        <article class="route-card" data-time="${item.time}" data-bus="${item.buses[0] || ''}" data-route="${item.route.toLowerCase()}" data-keywords="${item.keywords}">
+                            <div class="card-header">
+                                <span class="time">${item.time}</span>
+                                <div class="bus-list">${busTags.length > 0 ? busTags : ''}</div>
+                            </div>
+
+                            <div class="route-path">${rowsHTML}</div>
+
+                            ${item.description ? `
+                            <div class="card-footer">
+                                <p><span class="label">Описание:</span> ${item.description}</p>
+                            </div>` : ''}
+                        </article>`;
+                    container.insertAdjacentHTML('beforeend', cardHTML);
+                });
+            }
+            
+            async function initializeApp() {
+                const scheduleDateElem = document.getElementById('scheduleDate');
+                const lastUpdatedElem = document.getElementById('lastUpdated');
+                const scheduleContainer = document.getElementById('scheduleContainer');
+
+                const now = new Date();
+                const dateString = now.toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit' });
+                const timeString = now.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' });
+                scheduleDateElem.textContent = `Расписание автобусов на: ${dateString}`;
+                lastUpdatedElem.textContent = `Последнее обновление: ${timeString}`;
+
+                try {
+                    const scheduleData = await fetchAndParseData();
+                    setupControls(scheduleData);
+                } catch(error) {
+                    console.error("Ошибка загрузки:", error);
+                    lastUpdatedElem.textContent = 'Ошибка загрузки данных.';
+                    scheduleContainer.innerHTML = `<div class="error-message">Не удалось загрузить расписание. Источник временно недоступен. Попробуйте обновить страницу позже.</div>`;
+                }
+            }
+            
+            function setupControls(data) {
+                const fromInput = document.getElementById('fromInput');
+                const toInput = document.getElementById('toInput');
+                const generalFilter = document.getElementById('generalFilter');
+                const sortByTimeBtn = document.getElementById('sortByTimeBtn');
+                const sortByBusBtn = document.getElementById('sortByBusBtn');
+                let currentData = [...data];
+
+                function applyFilters() {
+                    const fromValue = fromInput.value.toLowerCase().trim();
+                    const toValue = toInput.value.toLowerCase().trim();
+                    const generalValue = generalFilter.value.toLowerCase().trim();
+                    
+                    const filteredData = data.filter(item => {
+                        const route = item.route.toLowerCase();
+                        const keywords = item.keywords;
+                        if (generalValue && !keywords.includes(generalValue)) return false;
+
+                        const stops = route.split(/→| - /).map(s => s.trim());
+                        const fromIndex = stops.findIndex(s => s.includes(fromValue));
+                        if (fromValue && fromIndex === -1) return false;
+                        
+                        const toIndex = stops.findIndex(s => s.includes(toValue));
+                        if (toValue) {
+                            if (toIndex === -1) return false;
+                            if (fromValue && toIndex <= fromIndex) return false;
+                        }
+                        return true;
+                    });
+                    
+                    currentData = filteredData;
+                    sortAndRender();
+                }
+
+                function sortAndRender(criteria) {
+                    const activeSort = criteria || (sortByTimeBtn.classList.contains('active') ? 'time' : 'bus');
+
+                    if (activeSort === 'time') {
+                        currentData.sort((a, b) => a.time.localeCompare(b.time, 'kn', { numeric: true }));
+                    } else if (activeSort === 'bus') {
+                        currentData.sort((a, b) => (parseInt(a.buses[0]) || 9999) - (parseInt(b.buses[0]) || 9999));
+                    }
+                    renderCards(currentData);
+                }
+                
+                [fromInput, toInput, generalFilter].forEach(input => input.addEventListener('input', applyFilters));
+                
+                sortByTimeBtn.addEventListener('click', () => {
+                    sortByTimeBtn.classList.add('active');
+                    sortByBusBtn.classList.remove('active');
+                    sortAndRender('time');
+                });
+
+                sortByBusBtn.addEventListener('click', () => {
+                    sortByBusBtn.classList.add('active');
+                    sortByTimeBtn.classList.remove('active');
+                    sortAndRender('bus');
+                });
+                
+                applyFilters();
+            }
+
+            initializeApp();
+        });
+        </script>
+
     </div>
 
-    <script>
-    document.addEventListener('DOMContentLoaded', () => {
-
-        async function fetchAndParseData() {
-            const targetUrl = 'http://3aic.ru/';
-            const proxyUrl = 'https://cors-anywhere.herokuapp.com/';
-            const response = await fetch(`${proxyUrl}${targetUrl}`);
-            if (!response.ok) throw new Error(`Ошибка сети: ${response.status}.`);
-            const htmlText = await response.text();
-            
-            const parser = new DOMParser();
-            const doc = parser.parseFromString(htmlText, 'text/html');
-            const scheduleData = [];
-            const rows = doc.querySelectorAll('table tr');
-
-            rows.forEach((row, index) => {
-                if (index === 0) return;
-                const cells = row.querySelectorAll('td');
-                if (cells.length >= 4) {
-                    const time = cells[0].textContent.trim();
-                    const route = cells[1].textContent.trim();
-                    const busesText = cells[2].textContent.trim();
-                    const description = cells[3].textContent.trim();
-                    if (!time) return;
-                    const buses = busesText.replace(/[()]/g, '').split(/[\s,]+/).filter(b => b);
-                    scheduleData.push({
-                        time, buses, route, description,
-                        keywords: `${time} ${buses.join(' ')} ${route} ${description}`.toLowerCase()
-                    });
-                }
-            });
-            return scheduleData;
-        }
-
-        function renderCards(data) {
-            const container = document.getElementById('scheduleContainer');
-            container.innerHTML = '';
-            
-            if (data.length === 0) {
-                 container.innerHTML = `<p class="error-message">Не удалось найти ни одного маршрута.</p>`;
-                 return;
-            }
-
-            data.forEach(item => {
-                const busTags = item.buses.map(bus => `<span class="bus-tag">№ ${bus}</span>`).join('');
-                
-                const stops = item.route
-                    .split('→')
-                    .flatMap(part => part.split(' - '))
-                    .map(stop => stop.trim())
-                    .filter(stop => stop);
-                let rowsHTML = '';
-                stops.forEach((stop, index) => {
-                    const isFirst = index === 0;
-                    const isLast = index === stops.length - 1;
-                    const label = isFirst ? 'Отправление' : (isLast ? 'Прибытие' : 'Промежуточная');
-                    const iconClass = isFirst ? 'start' : (isLast ? 'end' : 'mid');
-                    const pointClass = isFirst || isLast ? '' : 'is-mid';
-                    const lineHTML = !isLast ? `<div class="v-line"></div>` : '';
-                    rowsHTML += `
-                        <div class="stop-row ${pointClass}">
-                            <div class="stop-visual">
-                                <div class="stop-icon ${iconClass}"></div>
-                                ${lineHTML}
-                            </div>
-                            <div class="stop-details">
-                                <div class="label">${label}</div>
-                                <div class="location">${stop}</div>
-                            </div>
-                        </div>`;
-                });
-                if (stops.length < 1) {
-                    rowsHTML = `
-                        <div class="stop-row">
-                            <div class="stop-visual">
-                                <div class="stop-icon start"></div>
-                            </div>
-                            <div class="stop-details">
-                                <div class="location">${item.route}</div>
-                            </div>
-                        </div>`;
-                }
-
-                const cardHTML = `
-                    <article class="route-card" data-time="${item.time}" data-bus="${item.buses[0] || ''}" data-route="${item.route.toLowerCase()}" data-keywords="${item.keywords}">
-                        <div class="card-header">
-                            <span class="time">${item.time}</span>
-                            <div class="bus-list">${busTags.length > 0 ? busTags : ''}</div>
-                        </div>
-
-                        <div class="route-path">${rowsHTML}</div>
-
-                        ${item.description ? `
-                        <div class="card-footer">
-                            <p><span class="label">Описание:</span> ${item.description}</p>
-                        </div>` : ''}
-                    </article>`;
-                container.insertAdjacentHTML('beforeend', cardHTML);
-            });
-        }
-        
-        async function initializeApp() {
-            const scheduleDateElem = document.getElementById('scheduleDate');
-            const lastUpdatedElem = document.getElementById('lastUpdated');
-            const scheduleContainer = document.getElementById('scheduleContainer');
-
-            // --- НОВОЕ: Установка даты и времени ---
-            const now = new Date();
-            const dateString = now.toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit' });
-            const timeString = now.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' });
-            scheduleDateElem.textContent = `Расписание автобусов на: ${dateString}`;
-            lastUpdatedElem.textContent = `Последнее обновление: ${timeString}`;
-
-            try {
-                const scheduleData = await fetchAndParseData();
-                setupControls(scheduleData);
-            } catch(error) {
-                console.error("Ошибка загрузки:", error);
-                lastUpdatedElem.textContent = 'Ошибка загрузки данных.';
-                scheduleContainer.innerHTML = `<div class="error-message">Не удалось загрузить расписание. Сайт-источник или CORS-прокси недоступны.<br><small>Если проблема в прокси, перейдите по <a href="https://cors-anywhere.herokuapp.com/" target="_blank" style="color: #bb86fc;">этой ссылке</a>, нажмите кнопку и вернитесь.</small></div>`;
-            }
-        }
-        
-        function setupControls(data) {
-            const fromInput = document.getElementById('fromInput');
-            const toInput = document.getElementById('toInput');
-            const generalFilter = document.getElementById('generalFilter');
-            const sortByTimeBtn = document.getElementById('sortByTimeBtn');
-            const sortByBusBtn = document.getElementById('sortByBusBtn');
-            let currentData = [...data];
-
-            function applyFilters() {
-                const fromValue = fromInput.value.toLowerCase().trim();
-                const toValue = toInput.value.toLowerCase().trim();
-                const generalValue = generalFilter.value.toLowerCase().trim();
-                
-                const filteredData = data.filter(item => {
-                    const route = item.route.toLowerCase();
-                    const keywords = item.keywords;
-                    if (generalValue && !keywords.includes(generalValue)) return false;
-
-                    const stops = route.split(/→| - /).map(s => s.trim());
-                    const fromIndex = stops.findIndex(s => s.includes(fromValue));
-                    if (fromValue && fromIndex === -1) return false;
-                    
-                    const toIndex = stops.findIndex(s => s.includes(toValue));
-                    if (toValue) {
-                        if (toIndex === -1) return false;
-                        if (fromValue && toIndex <= fromIndex) return false;
-                    }
-                    return true;
-                });
-                
-                currentData = filteredData;
-                sortAndRender();
-            }
-
-            function sortAndRender(criteria) {
-                const activeSort = criteria || (sortByTimeBtn.classList.contains('active') ? 'time' : 'bus');
-
-                if (activeSort === 'time') {
-                    currentData.sort((a, b) => a.time.localeCompare(b.time, 'kn', { numeric: true }));
-                } else if (activeSort === 'bus') {
-                    currentData.sort((a, b) => (parseInt(a.buses[0]) || 9999) - (parseInt(b.buses[0]) || 9999));
-                }
-                renderCards(currentData);
-            }
-            
-            [fromInput, toInput, generalFilter].forEach(input => input.addEventListener('input', applyFilters));
-            
-            sortByTimeBtn.addEventListener('click', () => {
-                sortByTimeBtn.classList.add('active');
-                sortByBusBtn.classList.remove('active');
-                sortAndRender('time');
-            });
-
-            sortByBusBtn.addEventListener('click', () => {
-                sortByBusBtn.classList.add('active');
-                sortByTimeBtn.classList.remove('active');
-                sortAndRender('bus');
-            });
-            
-            applyFilters();
-        }
-
-        initializeApp();
-    });
-    </script>
-
-</body>
-</html>
+    </body>
+    </html>
