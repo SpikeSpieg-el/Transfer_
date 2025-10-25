@@ -1,0 +1,243 @@
+/* Общие стили */
+        :root {
+            --bg-color: #121212;
+            --surface-color: #1e1e1e;
+            --primary-color: #03dac6;
+            --secondary-color: #bb86fc;
+            --text-color: #e0e0e0;
+            --text-secondary-color: #a0a0a0;
+            --border-color: #333;
+        }
+
+        *, *::before, *::after {
+            box-sizing: border-box;
+        }
+
+        body {
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+            margin: 0;
+            padding: 20px 15px;
+            line-height: 1.6;
+        }
+
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+        }
+
+        /* Заголовок */
+        header {
+            text-align: center;
+            margin-bottom: 30px;
+        }
+        header h1 {
+            color: #fff;
+            font-size: 1.8em; /* Немного уменьшили для баланса */
+            margin-bottom: 5px;
+            font-weight: 700;
+        }
+        #lastUpdated {
+            color: var(--primary-color);
+            font-size: 0.9em;
+        }
+
+        /* Загрузчик */
+        .loader-overlay {
+            position: fixed;
+            inset: 0;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            background: rgba(18, 18, 18, 0.85);
+            backdrop-filter: blur(2px);
+            z-index: 1000;
+            transition: opacity 0.25s ease, visibility 0.25s ease;
+        }
+        .loader-overlay.hidden {
+            opacity: 0;
+            visibility: hidden;
+            pointer-events: none;
+        }
+        .spinner {
+            width: 44px;
+            height: 44px;
+            border: 4px solid rgba(255,255,255,0.15);
+            border-top-color: var(--secondary-color);
+            border-radius: 50%;
+            animation: spin 0.9s linear infinite;
+            margin-bottom: 12px;
+        }
+        .loader-text {
+            color: var(--text-secondary-color);
+            font-weight: 600;
+        }
+        @keyframes spin { to { transform: rotate(360deg); } }
+
+        /* Панель управления */
+        .controls {
+            background-color: var(--surface-color);
+            padding: 20px;
+            border-radius: 12px;
+            margin-bottom: 30px;
+            border: 1px solid var(--border-color);
+        }
+        .filters {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 15px;
+            margin-bottom: 20px;
+        }
+        .filter-full-width {
+            grid-column: 1 / -1;
+        }
+        .filters input {
+            width: 100%;
+            padding: 12px 15px;
+            border-radius: 8px;
+            border: 1px solid var(--border-color);
+            background-color: #2a2a2a;
+            color: var(--text-color);
+            font-size: 1em;
+            transition: border-color 0.2s, box-shadow 0.2s;
+        }
+        .filters input::placeholder { color: var(--text-secondary-color); }
+        .filters input:focus {
+            outline: 0;
+            border-color: var(--secondary-color);
+            box-shadow: 0 0 0 3px rgba(187, 134, 252, 0.2);
+        }
+
+        .sorting {
+            display: flex;
+            gap: 10px;
+            align-items: center;
+            flex-wrap: wrap;
+        }
+        .sorting span {
+             color: var(--text-secondary-color);
+             font-size: 0.9em;
+        }
+        .sorting button {
+            background-color: #333;
+            color: var(--text-color);
+            border: none;
+            padding: 8px 15px;
+            border-radius: 20px;
+            cursor: pointer;
+            transition: background-color 0.2s, color 0.2s;
+            font-weight: 500;
+        }
+        .sorting button.active {
+            background-color: var(--secondary-color);
+            color: #121212;
+            font-weight: 700;
+        }
+
+        /* Дизайн карточки маршрута */
+        .route-card {
+            background-color: var(--surface-color);
+            border-radius: 12px;
+            padding: 20px;
+            margin-bottom: 20px;
+            border: 1px solid var(--border-color);
+            transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
+            display: block;
+        }
+        .route-card.hidden { display: none; }
+        .route-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 8px 25px rgba(0, 0, 0, 0.5);
+            border-color: var(--secondary-color);
+        }
+
+        .card-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            margin-bottom: 20px;
+            border-bottom: 1px solid var(--border-color);
+            padding-bottom: 15px;
+        }
+        .card-header .time {
+            font-size: 2.2em;
+            font-weight: 700;
+            color: var(--primary-color);
+            line-height: 1;
+        }
+        .bus-list { display: flex; flex-wrap: wrap; gap: 8px; justify-content: flex-end; }
+        .bus-tag {
+            background-color: var(--secondary-color);
+            color: #121212;
+            padding: 5px 12px;
+            border-radius: 15px;
+            font-weight: 700;
+            font-size: 0.9em;
+        }
+
+        /* Визуализация маршрута */
+        .route-path { display: flex; gap: 15px; }
+        .path-visual { display: flex; flex-direction: column; align-items: center; }
+        .path-visual .icon { width: 24px; height: 24px; fill: var(--text-secondary-color); flex-shrink: 0; }
+        .path-visual .icon.mid-icon { width: 16px; height: 16px; margin: 4px 0; fill: #555; }
+        .path-line {
+            width: 2px;
+            min-height: 20px; /* Минимальная длина линии */
+            flex-grow: 1;
+            background: linear-gradient(to bottom, var(--secondary-color), var(--primary-color));
+            opacity: 0.3;
+        }
+        .path-details { display: flex; flex-direction: column; flex-grow: 1; justify-content: space-between; }
+        .path-point { padding: 2px 0; }
+        .path-point .label {
+            font-size: 0.8em;
+            color: var(--text-secondary-color);
+            text-transform: uppercase;
+            font-weight: 500;
+        }
+        .path-point .location {
+            font-size: 1.1em;
+            font-weight: 500;
+            color: var(--text-color);
+        }
+        /* Скрываем промежуточные лэйблы для чистоты */
+        .path-point.is-mid .label { display: none; }
+
+        .route-path { display: flex; flex-direction: column; gap: 6px; }
+        .stop-row { display: grid; grid-template-columns: 28px 1fr; align-items: start; gap: 12px; padding: 4px 6px; border-radius: 8px; transition: background-color 0.2s ease; }
+        .stop-row:hover { background-color: rgba(187, 134, 252, 0.08); }
+        .stop-visual { display: flex; flex-direction: column; align-items: center; }
+        .stop-icon { width: 14px; height: 14px; border-radius: 50%; border: 2px solid #555; background: #222; box-shadow: 0 0 0 2px var(--surface-color); }
+        .stop-icon.start { border-color: var(--secondary-color); background: var(--secondary-color); }
+        .stop-icon.end { border-color: var(--primary-color); background: var(--primary-color); }
+        .stop-icon.mid { border-color: #666; background: #2a2a2a; }
+        .v-line { width: 2px; flex: 1; background: linear-gradient(to bottom, var(--secondary-color), var(--primary-color)); opacity: 0.3; margin-top: 4px; }
+        .stop-details .label { font-size: 0.75em; color: var(--text-secondary-color); text-transform: uppercase; font-weight: 600; }
+        .stop-details .location { font-size: 1.05em; font-weight: 700; color: var(--text-color); }
+        .stop-row.is-mid .label { display: none; }
+
+        /* Футер карточки */
+        .card-footer {
+            margin-top: 15px;
+            padding-top: 15px;
+            border-top: 1px solid var(--border-color);
+        }
+        .card-footer .label { font-weight: 700; color: var(--text-secondary-color); }
+        .card-footer p { margin: 0; color: var(--text-color); }
+
+        /* Сообщения */
+        .error-message {
+            text-align: center; color: #ff8a80; background-color: rgba(255, 138, 128, 0.1);
+            padding: 20px; border-radius: 8px; border: 1px solid rgba(255, 138, 128, 0.3);
+        }
+
+        /* Адаптивность */
+        @media (max-width: 600px) {
+            body { padding: 10px; }
+            header h1 { font-size: 1.5em; }
+            .filters { grid-template-columns: 1fr; }
+            .card-header { flex-direction: column; align-items: flex-start; gap: 10px; }
+            .card-header .time { font-size: 1.8em; }
+        }
