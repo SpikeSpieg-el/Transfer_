@@ -397,8 +397,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 const hoursSinceUpdate = (now - generated) / (1000 * 60 * 60);
                 
                 // Данные устарели если:
-                // 1. Прошло больше 24 часов с момента обновления
-                if (hoursSinceUpdate > 24) return true;
+                // 1. Прошло больше 15 часов с момента обновления
+                if (hoursSinceUpdate > 15) return true;
                 
                 // 2. Дата в расписании не совпадает с сегодняшней или завтрашней
                 if (forDate) {
@@ -437,17 +437,11 @@ document.addEventListener('DOMContentLoaded', () => {
                         updateHeaderText(local.forDate, updatedText);
                         setupControls(local.items);
                         
-                        // Скрываем кнопку обновления для актуальных данных
-                        refreshBtn.style.display = 'none';
-                        
                         console.log('✅ Используются актуальные локальные данные');
                     } else {
                         // Данные устарели или пусты
                         if (dataIsStale) {
                             console.warn('⚠️ Локальные данные устарели, обновляем...');
-                            // Показываем кнопку обновления
-                            refreshBtn.style.display = 'flex';
-                            refreshBtn.title = currentLang === 'ru' ? 'Данные устарели. Нажмите для обновления' : 'Data is stale. Click to refresh';
                         }
                         throw new Error("Local data is stale or empty, trying live fetch");
                     }
