@@ -1,4 +1,121 @@
- document.addEventListener('DOMContentLoaded', () => {
+document.addEventListener('DOMContentLoaded', () => {
+
+            // Translations
+            const translations = {
+                ru: {
+                    title: 'Расписание Вахт',
+                    header: 'Расписание автобусов',
+                    loading: 'Загрузка данных...',
+                    loadingText: 'Загружаем расписание…',
+                    fromPlaceholder: 'Откуда...',
+                    toPlaceholder: 'Куда...',
+                    searchPlaceholder: 'Номер автобуса, описание...',
+                    sortLabel: 'Сортировать:',
+                    sortTime: 'По времени',
+                    sortBus: 'По номеру автобуса',
+                    departure: 'Отправление',
+                    arrival: 'Прибытие',
+                    intermediate: 'Промежуточная',
+                    description: 'Описание:',
+                    scheduleFor: 'Расписание автобусов на:',
+                    updated: 'Обновлено:',
+                    updatedNow: 'Обновлено сейчас:',
+                    cachedData: 'Показаны данные из кеша:',
+                    errorLoading: 'Ошибка загрузки данных.',
+                    errorMessage: 'Не удалось загрузить расписание. Источник временно недоступен. Попробуйте обновить страницу позже.',
+                    noRoutes: 'Не удалось найти ни одного маршрута.'
+                },
+                en: {
+                    title: 'Shuttle Schedule',
+                    header: 'Bus Schedule',
+                    loading: 'Loading data...',
+                    loadingText: 'Loading schedule…',
+                    fromPlaceholder: 'From...',
+                    toPlaceholder: 'To...',
+                    searchPlaceholder: 'Bus number, description...',
+                    sortLabel: 'Sort by:',
+                    sortTime: 'By time',
+                    sortBus: 'By bus number',
+                    departure: 'Departure',
+                    arrival: 'Arrival',
+                    intermediate: 'Stop',
+                    description: 'Description:',
+                    scheduleFor: 'Bus schedule for:',
+                    updated: 'Updated:',
+                    updatedNow: 'Updated now:',
+                    cachedData: 'Showing cached data:',
+                    errorLoading: 'Error loading data.',
+                    errorMessage: 'Failed to load schedule. Source temporarily unavailable. Please try refreshing the page later.',
+                    noRoutes: 'No routes found.'
+                }
+            };
+
+            let currentLang = localStorage.getItem('language') || 'ru';
+            let currentTheme = localStorage.getItem('theme') || 'light';
+
+            // Apply theme on load
+            document.documentElement.setAttribute('data-theme', currentTheme);
+
+            // Theme toggle
+            const themeToggle = document.getElementById('themeToggle');
+            const sunIcon = document.getElementById('sunIcon');
+            const moonIcon = document.getElementById('moonIcon');
+
+            function updateThemeIcon() {
+                if (currentTheme === 'dark') {
+                    sunIcon.style.display = 'none';
+                    moonIcon.style.display = 'block';
+                } else {
+                    sunIcon.style.display = 'block';
+                    moonIcon.style.display = 'none';
+                }
+            }
+
+            updateThemeIcon();
+
+            themeToggle.addEventListener('click', () => {
+                currentTheme = currentTheme === 'light' ? 'dark' : 'light';
+                document.documentElement.setAttribute('data-theme', currentTheme);
+                localStorage.setItem('theme', currentTheme);
+                updateThemeIcon();
+            });
+
+            // Language toggle
+            const langToggle = document.getElementById('langToggle');
+            const langText = document.getElementById('langText');
+
+            function updateLanguage() {
+                const t = translations[currentLang];
+                
+                // Update text content
+                document.querySelectorAll('[data-i18n]').forEach(el => {
+                    const key = el.getAttribute('data-i18n');
+                    if (t[key]) el.textContent = t[key];
+                });
+
+                // Update placeholders
+                document.querySelectorAll('[data-i18n-placeholder]').forEach(el => {
+                    const key = el.getAttribute('data-i18n-placeholder');
+                    if (t[key]) el.placeholder = t[key];
+                });
+
+                // Update title
+                document.title = t.title;
+                
+                // Update language button text
+                langText.textContent = currentLang === 'ru' ? 'EN' : 'RU';
+                
+                // Update HTML lang attribute
+                document.documentElement.lang = currentLang;
+            }
+
+            updateLanguage();
+
+            langToggle.addEventListener('click', () => {
+                currentLang = currentLang === 'ru' ? 'en' : 'ru';
+                localStorage.setItem('language', currentLang);
+                updateLanguage();
+            });
 
             async function fetchLocalSchedule() {
                 const url = `./data/schedule.json?t=${Date.now()}`;
@@ -120,14 +237,17 @@
                 throw new Error('Не удалось получить данные (' + errors.join(' | ') + ')');
             }
 
-            function renderCards(data) {
+            function renderCards(data, searchTerms = {}) {
                 const container = document.getElementById('scheduleContainer');
+                const t = translations[currentLang];
                 container.innerHTML = '';
                 
                 if (data.length === 0) {
-                     container.innerHTML = `<p class="error-message">Не удалось найти ни одного маршрута.</p>`;
+                     container.innerHTML = `<p class="error-message">${t.noRoutes}</p>`;
                      return;
                 }
+
+                const { fromValue = '', toValue = '' } = searchTerms;
 
                 data.forEach(item => {
                     const busTags = item.buses.map(bus => `<span class="bus-tag">№ ${bus}</span>`).join('');
@@ -141,12 +261,19 @@
                     stops.forEach((stop, index) => {
                         const isFirst = index === 0;
                         const isLast = index === stops.length - 1;
-                        const label = isFirst ? 'Отправление' : (isLast ? 'Прибытие' : 'Промежуточная');
+                        const label = isFirst ? t.departure : (isLast ? t.arrival : t.intermediate);
                         const iconClass = isFirst ? 'start' : (isLast ? 'end' : 'mid');
                         const pointClass = isFirst || isLast ? '' : 'is-mid';
                         const lineHTML = !isLast ? `<div class=\"v-line\"></div>` : '';
+                        
+                        // Проверяем, совпадает ли остановка с поиском
+                        const stopLower = stop.toLowerCase();
+                        const isFromMatch = fromValue && stopLower.includes(fromValue);
+                        const isToMatch = toValue && stopLower.includes(toValue);
+                        const highlightClass = isFromMatch || isToMatch ? 'highlighted' : '';
+                        
                         rowsHTML += `
-                            <div class="stop-row ${pointClass}">
+                            <div class="stop-row ${pointClass} ${highlightClass}">
                                 <div class="stop-visual">
                                     <div class="stop-icon ${iconClass}"></div>
                                     ${lineHTML}
@@ -180,7 +307,7 @@
 
                             ${item.description ? `
                             <div class="card-footer">
-                                <p><span class="label">Описание:</span> ${item.description}</p>
+                                <p><span class="label">${t.description}</span> ${item.description}</p>
                             </div>` : ''}
                         </article>`;
                     container.insertAdjacentHTML('beforeend', cardHTML);
@@ -190,13 +317,14 @@
             function updateHeaderText(forDate, lastUpdated) {
                 const scheduleDateElem = document.getElementById('scheduleDate');
                 const lastUpdatedElem = document.getElementById('lastUpdated');
+                const t = translations[currentLang];
                 
                 if (forDate) {
-                    scheduleDateElem.textContent = `Расписание автобусов на: ${forDate}`;
+                    scheduleDateElem.textContent = `${t.scheduleFor} ${forDate}`;
                 } else {
                     const now = new Date();
-                    const dateString = now.toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit' });
-                    scheduleDateElem.textContent = `Расписание автобусов на: ${dateString}`;
+                    const dateString = now.toLocaleDateString(currentLang === 'ru' ? 'ru-RU' : 'en-US', { day: '2-digit', month: '2-digit' });
+                    scheduleDateElem.textContent = `${t.scheduleFor} ${dateString}`;
                 }
                 
                 lastUpdatedElem.textContent = lastUpdated;
@@ -205,15 +333,17 @@
             async function initializeApp() {
                 const scheduleContainer = document.getElementById('scheduleContainer');
                 const loader = document.getElementById('loader');
+                const t = translations[currentLang];
+                const locale = currentLang === 'ru' ? 'ru-RU' : 'en-US';
 
                 const now = new Date();
-                const timeString = now.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' });
+                const timeString = now.toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit' });
 
                 try {
                     const local = await fetchLocalSchedule();
                     if (Array.isArray(local.items) && local.items.length > 0) {
                         const dt = new Date(local.generatedAt);
-                        const updatedText = `Обновлено: ${dt.toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit' })} ${dt.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' })}`;
+                        const updatedText = `${t.updated} ${dt.toLocaleDateString(locale, { day: '2-digit', month: '2-digit' })} ${dt.toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit' })}`;
                         updateHeaderText(local.forDate, updatedText);
                         setupControls(local.items);
                     } else {
@@ -223,7 +353,7 @@
                     console.warn("Could not load local schedule, falling back to live fetch:", error);
                     try {
                         const liveData = await fetchAndParseData();
-                        updateHeaderText(liveData.forDate, `Обновлено сейчас: ${timeString}`);
+                        updateHeaderText(liveData.forDate, `${t.updatedNow} ${timeString}`);
                         setupControls(liveData.items);
                     } catch (liveError) {
                         console.error("Live fetch failed:", liveError);
@@ -231,15 +361,15 @@
                             const cached = JSON.parse(localStorage.getItem('scheduleCache') || 'null');
                             if (cached && Array.isArray(cached.data) && cached.data.length) {
                                 const dt = new Date(cached.ts);
-                                const cachedUpdatedText = `Показаны данные из кеша: ${dt.toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit' })} ${dt.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' })}`;
+                                const cachedUpdatedText = `${t.cachedData} ${dt.toLocaleDateString(locale, { day: '2-digit', month: '2-digit' })} ${dt.toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit' })}`;
                                 updateHeaderText(cached.forDate, cachedUpdatedText);
                                 setupControls(cached.data);
                             } else {
                                 throw new Error("Cache is also empty");
                             }
                         } catch (_) {
-                            updateHeaderText(null, 'Ошибка загрузки данных.');
-                            scheduleContainer.innerHTML = `<div class="error-message">Не удалось загрузить расписание. Источник временно недоступен. Попробуйте обновить страницу позже.</div>`;
+                            updateHeaderText(null, t.errorLoading);
+                            scheduleContainer.innerHTML = `<div class="error-message">${t.errorMessage}</div>`;
                         }
                     }
                 } finally {
@@ -254,11 +384,15 @@
                 const sortByTimeBtn = document.getElementById('sortByTimeBtn');
                 const sortByBusBtn = document.getElementById('sortByBusBtn');
                 let currentData = [...data];
+                let currentSearchTerms = {};
 
                 function applyFilters() {
                     const fromValue = fromInput.value.toLowerCase().trim();
                     const toValue = toInput.value.toLowerCase().trim();
                     const generalValue = generalFilter.value.toLowerCase().trim();
+                    
+                    // Сохраняем поисковые термины для подсветки
+                    currentSearchTerms = { fromValue, toValue };
                     
                     const filteredData = data.filter(item => {
                         const route = item.route.toLowerCase();
@@ -289,7 +423,7 @@
                     } else if (activeSort === 'bus') {
                         currentData.sort((a, b) => (parseInt(a.buses[0]) || 9999) - (parseInt(b.buses[0]) || 9999));
                     }
-                    renderCards(currentData);
+                    renderCards(currentData, currentSearchTerms);
                 }
                 
                 [fromInput, toInput, generalFilter].forEach(input => input.addEventListener('input', applyFilters));
