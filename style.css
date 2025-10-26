@@ -115,6 +115,20 @@ header h1 {
     transform: translateY(0);
 }
 
+.icon-btn.rotating svg {
+    animation: rotate 1s linear infinite;
+}
+
+.icon-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+@keyframes rotate {
+    from { transform: rotate(0deg); }
+    to { transform: rotate(360deg); }
+}
+
 #lastUpdated {
     color: var(--text-secondary);
     font-size: 0.875rem;
@@ -511,6 +525,42 @@ header h1 {
     font-weight: 500;
 }
 
+/* Notifications */
+.notification {
+    position: fixed;
+    top: 20px;
+    right: 20px;
+    padding: 16px 24px;
+    border-radius: 12px;
+    font-weight: 600;
+    font-size: 0.9375rem;
+    box-shadow: var(--shadow-lg);
+    z-index: 2000;
+    opacity: 0;
+    transform: translateX(400px);
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.notification.show {
+    opacity: 1;
+    transform: translateX(0);
+}
+
+.notification-success {
+    background: var(--accent-success);
+    color: white;
+}
+
+.notification-error {
+    background: var(--accent-error);
+    color: white;
+}
+
+.notification-info {
+    background: var(--accent-primary);
+    color: white;
+}
+
 /* Responsive */
 @media (max-width: 768px) {
     body {
@@ -565,5 +615,13 @@ header h1 {
     .stop-icon.mid {
         width: 10px;
         height: 10px;
+    }
+    
+    .notification {
+        top: 10px;
+        right: 10px;
+        left: 10px;
+        padding: 12px 16px;
+        font-size: 0.875rem;
     }
 }

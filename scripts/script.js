@@ -117,6 +117,64 @@ document.addEventListener('DOMContentLoaded', () => {
                 updateLanguage();
             });
 
+            // Refresh button functionality
+            const refreshBtn = document.getElementById('refreshBtn');
+            let isRefreshing = false;
+
+            async function forceRefreshData() {
+                if (isRefreshing) return;
+                
+                isRefreshing = true;
+                refreshBtn.classList.add('rotating');
+                refreshBtn.disabled = true;
+                
+                const t = translations[currentLang];
+                const locale = currentLang === 'ru' ? 'ru-RU' : 'en-US';
+                const scheduleContainer = document.getElementById('scheduleContainer');
+                
+                try {
+                    console.log('🔄 Принудительное обновление данных...');
+                    const liveData = await fetchAndParseData();
+                    const timeString = new Date().toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit' });
+                    updateHeaderText(liveData.forDate, `${t.updatedNow} ${timeString}`);
+                    
+                    // Перерендерим карточки с новыми данными
+                    const fromInput = document.getElementById('fromInput');
+                    const toInput = document.getElementById('toInput');
+                    const fromValue = fromInput?.value.toLowerCase().trim() || '';
+                    const toValue = toInput?.value.toLowerCase().trim() || '';
+                    renderCards(liveData.items, { fromValue, toValue });
+                    
+                    console.log('✅ Данные успешно обновлены');
+                    
+                    // Показываем уведомление об успехе
+                    showNotification(currentLang === 'ru' ? 'Данные обновлены!' : 'Data updated!', 'success');
+                } catch (error) {
+                    console.error('❌ Ошибка обновления:', error);
+                    showNotification(currentLang === 'ru' ? 'Ошибка обновления' : 'Update failed', 'error');
+                } finally {
+                    isRefreshing = false;
+                    refreshBtn.classList.remove('rotating');
+                    refreshBtn.disabled = false;
+                }
+            }
+
+            // Простое уведомление
+            function showNotification(message, type = 'info') {
+                const notification = document.createElement('div');
+                notification.className = `notification notification-${type}`;
+                notification.textContent = message;
+                document.body.appendChild(notification);
+                
+                setTimeout(() => notification.classList.add('show'), 10);
+                setTimeout(() => {
+                    notification.classList.remove('show');
+                    setTimeout(() => notification.remove(), 300);
+                }, 3000);
+            }
+
+            refreshBtn.addEventListener('click', forceRefreshData);
+
             async function fetchLocalSchedule() {
                 const url = `./data/schedule.json?t=${Date.now()}`;
                 const res = await fetch(url, { cache: 'no-store' });
@@ -330,6 +388,33 @@ document.addEventListener('DOMContentLoaded', () => {
                 lastUpdatedElem.textContent = lastUpdated;
             }
 
+            // Проверка актуальности данных
+            function isDataStale(generatedAt, forDate) {
+                if (!generatedAt) return true;
+                
+                const now = new Date();
+                const generated = new Date(generatedAt);
+                const hoursSinceUpdate = (now - generated) / (1000 * 60 * 60);
+                
+                // Данные устарели если:
+                // 1. Прошло больше 24 часов с момента обновления
+                if (hoursSinceUpdate > 24) return true;
+                
+                // 2. Дата в расписании не совпадает с сегодняшней или завтрашней
+                if (forDate) {
+                    const [day, month] = forDate.split('.').map(Number);
+                    const scheduleDate = new Date(now.getFullYear(), month - 1, day);
+                    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+                    const tomorrow = new Date(today);
+                    tomorrow.setDate(tomorrow.getDate() + 1);
+                    
+                    // Если дата расписания не сегодня и не завтра - данные устарели
+                    if (scheduleDate < today || scheduleDate > tomorrow) return true;
+                }
+                
+                return false;
+            }
+
             async function initializeApp() {
                 const scheduleContainer = document.getElementById('scheduleContainer');
                 const loader = document.getElementById('loader');
@@ -341,13 +426,30 @@ document.addEventListener('DOMContentLoaded', () => {
 
                 try {
                     const local = await fetchLocalSchedule();
-                    if (Array.isArray(local.items) && local.items.length > 0) {
+                    
+                    // Проверка актуальности данных
+                    const dataIsStale = isDataStale(local.generatedAt, local.forDate);
+                    
+                    if (Array.isArray(local.items) && local.items.length > 0 && !dataIsStale) {
+                        // Данные актуальны, используем их
                         const dt = new Date(local.generatedAt);
                         const updatedText = `${t.updated} ${dt.toLocaleDateString(locale, { day: '2-digit', month: '2-digit' })} ${dt.toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit' })}`;
                         updateHeaderText(local.forDate, updatedText);
                         setupControls(local.items);
+                        
+                        // Скрываем кнопку обновления для актуальных данных
+                        refreshBtn.style.display = 'none';
+                        
+                        console.log('✅ Используются актуальные локальные данные');
                     } else {
-                        throw new Error("Local data is empty, trying live fetch");
+                        // Данные устарели или пусты
+                        if (dataIsStale) {
+                            console.warn('⚠️ Локальные данные устарели, обновляем...');
+                            // Показываем кнопку обновления
+                            refreshBtn.style.display = 'flex';
+                            refreshBtn.title = currentLang === 'ru' ? 'Данные устарели. Нажмите для обновления' : 'Data is stale. Click to refresh';
+                        }
+                        throw new Error("Local data is stale or empty, trying live fetch");
                     }
                 } catch (error) {
                     console.warn("Could not load local schedule, falling back to live fetch:", error);
@@ -355,6 +457,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         const liveData = await fetchAndParseData();
                         updateHeaderText(liveData.forDate, `${t.updatedNow} ${timeString}`);
                         setupControls(liveData.items);
+                        console.log('✅ Загружены свежие данные с сервера');
                     } catch (liveError) {
                         console.error("Live fetch failed:", liveError);
                         try {
@@ -364,12 +467,14 @@ document.addEventListener('DOMContentLoaded', () => {
                                 const cachedUpdatedText = `${t.cachedData} ${dt.toLocaleDateString(locale, { day: '2-digit', month: '2-digit' })} ${dt.toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit' })}`;
                                 updateHeaderText(cached.forDate, cachedUpdatedText);
                                 setupControls(cached.data);
+                                console.log('⚠️ Используются данные из кеша браузера');
                             } else {
                                 throw new Error("Cache is also empty");
                             }
                         } catch (_) {
                             updateHeaderText(null, t.errorLoading);
                             scheduleContainer.innerHTML = `<div class="error-message">${t.errorMessage}</div>`;
+                            console.error('❌ Не удалось загрузить данные из всех источников');
                         }
                     }
                 } finally {
