@@ -13,41 +13,39 @@
                 const targetUrl = 'http://3aic.ru/';
 
                 const tryFetchers = [
-                    // Jina reader mirror first (often unblocked on mobile)
+                    // Cloudflare Workers CORS Proxy
                     async () => {
-                        const url = `https://r.jina.ai/http://3aic.ru/`;
+                        const url = `https://corsproxy.io/?${encodeURIComponent(targetUrl)}`;
                         const r = await fetch(url, { mode: 'cors', cache: 'no-store' });
-                        if (!r.ok) throw new Error(`jina http ${r.status}`);
+                        if (!r.ok) throw new Error(`corsproxy.io ${r.status}`);
                         return await r.text();
                     },
-                    // Jina with www variant
+                    // API CORS Proxy
                     async () => {
-                        const url = `https://r.jina.ai/http://www.3aic.ru/`;
+                        const url = `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(targetUrl)}`;
                         const r = await fetch(url, { mode: 'cors', cache: 'no-store' });
-                        if (!r.ok) throw new Error(`jina http www ${r.status}`);
+                        if (!r.ok) throw new Error(`codetabs ${r.status}`);
                         return await r.text();
                     },
-                    // Jina with https variant (in case origin supports it intermittently)
+                    // Proxy CORS SH alternative
                     async () => {
-                        const url = `https://r.jina.ai/https://3aic.ru/`;
+                        const url = `https://proxy.cors.sh/${targetUrl}`;
                         const r = await fetch(url, { mode: 'cors', cache: 'no-store' });
-                        if (!r.ok) throw new Error(`jina https ${r.status}`);
+                        if (!r.ok) throw new Error(`proxy.cors.sh ${r.status}`);
                         return await r.text();
                     },
-                    // AllOrigins JSON endpoint (some ISPs block /raw but allow /get)
+                    // AllOrigins RAW
                     async () => {
-                        const url = `https://api.allorigins.win/get?url=${encodeURIComponent(targetUrl)}&nocache=${Date.now()}`;
+                        const url = `https://api.allorigins.win/raw?url=${encodeURIComponent(targetUrl)}`;
                         const r = await fetch(url, { mode: 'cors', cache: 'no-store' });
-                        if (!r.ok) throw new Error(`allorigins(get) ${r.status}`);
-                        const j = await r.json();
-                        if (!j || !j.contents) throw new Error('allorigins(get) empty');
-                        return j.contents;
+                        if (!r.ok) throw new Error(`allorigins-raw ${r.status}`);
+                        return await r.text();
                     },
-                    // AllOrigins raw as last fallback
+                    // CORS Proxy
                     async () => {
-                        const url = `https://api.allorigins.win/raw?url=${encodeURIComponent(targetUrl)}&nocache=${Date.now()}`;
+                        const url = `https://corsproxy.org/?${encodeURIComponent(targetUrl)}`;
                         const r = await fetch(url, { mode: 'cors', cache: 'no-store' });
-                        if (!r.ok) throw new Error(`allorigins(raw) ${r.status}`);
+                        if (!r.ok) throw new Error(`corsproxy.org ${r.status}`);
                         return await r.text();
                     }
                 ];
@@ -61,94 +59,62 @@
 
                 const errors = [];
                 for (const fetcher of tryFetchers) {
-                    let text = '';
                     try {
-                        text = await withTimeout(fetcher(), 9000);
+                        const text = await withTimeout(fetcher(), 15000);
                         if (!text || text.length <= 100) throw new Error('empty');
 
-                        const lower = text.toLowerCase();
-                        const htmlHasTable = lower.includes('<table');
+                        const scheduleData = [];
+                        const parser = new DOMParser();
+                        const doc = parser.parseFromString(text, 'text/html');
 
-                        let scheduleData = [];
-                        if (htmlHasTable) {
-                            // HTML parsing
-                            const parser = new DOMParser();
-                            const doc = parser.parseFromString(text, 'text/html');
-                            const rows = doc.querySelectorAll('table tr');
-                            rows.forEach((row, index) => {
-                                if (index === 0) return;
-                                const cells = row.querySelectorAll('td');
-                                if (cells.length >= 2) {
-                                    const time = (cells[0]?.textContent || '').trim();
-                                    const route = (cells[1]?.textContent || '').trim();
-                                    const busesText = (cells[2]?.textContent || '').trim();
-                                    const description = (cells[3]?.textContent || '').trim();
-                                    if (!time) return;
-                                    // try to extract buses from busesText or route/description if needed
-                                    const sourceText = [busesText, route, description].join(' ');
-                                    let buses = sourceText.replace(/[()]/g, ' ').match(/\b\d{1,3}\b/g) || [];
-                                    buses = Array.from(new Set(buses));
-                                    scheduleData.push({
-                                        time,
-                                        buses,
-                                        route,
-                                        description,
-                                        keywords: `${time} ${buses.join(' ')} ${route} ${description}`.toLowerCase()
-                                    });
-                                }
-                            });
-                        } else {
-                            // Plain text parsing (Jina). Heuristic: lines that start with time HH:MM
-                            const lines = text.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
-                            const timeRe = /^(\d{1,2}:\d{2})\s+(.+)$/;
-                            const busParenRe = /\(([^)]+)\)/; // capture content in parentheses if present
-                            for (const line of lines) {
-                                const m = line.match(timeRe);
-                                if (!m) continue;
-                                const time = m[1];
-                                let rest = m[2];
-                                let buses = [];
-                                let description = '';
-
-                                const pm = rest.match(busParenRe);
-                                if (pm) {
-                                    buses = pm[1].split(/[\s,]+/).map(s => s.replace(/[^0-9]/g, '')).filter(Boolean);
-                                    rest = rest.replace(busParenRe, '').trim();
-                                } else {
-                                    const nums = rest.match(/\b\d{1,3}\b/g);
-                                    if (nums) buses = nums;
-                                }
-
-                                // Try to split route vs description by two spaces or ' — ' dash
-                                let route = rest;
-                                const dashIdx = rest.indexOf('—');
-                                if (dashIdx > 0) {
-                                    route = rest.substring(0, dashIdx).trim();
-                                    description = rest.substring(dashIdx + 1).trim();
-                                }
-
-                                if (route && time) {
-                                    scheduleData.push({
-                                        time,
-                                        buses,
-                                        route,
-                                        description,
-                                        keywords: `${time} ${buses.join(' ')} ${route} ${description}`.toLowerCase()
-                                    });
-                                }
-                            }
+                        // Ищем актуальную дату на странице
+                        let forDate = '';
+                        const bodyText = doc.body.textContent || '';
+                        const dateMatch = bodyText.match(/(\d{1,2}\.\d{1,2}(?:\.\d{4})?)/);
+                        if (dateMatch) {
+                            forDate = dateMatch[1].replace(/\.\d{4}$/, '');
                         }
+                        
+                        const rows = doc.querySelectorAll('table tr');
+                        rows.forEach((row, index) => {
+                            if (index === 0) return;
+                            const cells = row.querySelectorAll('td');
+                            if (cells.length >= 2) {
+                                const time = (cells[0]?.textContent || '').trim();
+                                const route = (cells[1]?.textContent || '').trim();
+                                const busesText = (cells[2]?.textContent || '').trim();
+
+                                // Пропускаем строки без времени или с заголовком
+                                if (!time || time.toUpperCase() === 'ВРЕМЯ') return;
+
+                                const descriptionParts = [];
+                                for (let i = 3; i < cells.length; i++) {
+                                    const cellText = (cells[i]?.textContent || '').trim();
+                                    if (cellText) descriptionParts.push(cellText);
+                                }
+                                const description = descriptionParts.join('; ');
+                                
+                                let buses = (busesText.match(/\b\d{3}\b/g) || []);
+                                buses = Array.from(new Set(buses));
+
+                                scheduleData.push({
+                                    time,
+                                    buses,
+                                    route,
+                                    description,
+                                    keywords: `${time} ${buses.join(' ')} ${route} ${description}`.toLowerCase()
+                                });
+                            }
+                        });
 
                         if (scheduleData.length) {
-                            try { localStorage.setItem('scheduleCache', JSON.stringify({ ts: Date.now(), data: scheduleData })); } catch {}
-                            return scheduleData;
+                            try { localStorage.setItem('scheduleCache', JSON.stringify({ ts: Date.now(), data: scheduleData, forDate })); } catch {}
+                            return { items: scheduleData, forDate };
                         }
 
-                        // parsed 0 rows, try next fetcher
                         errors.push('parsed 0 rows');
                     } catch (e) {
                         errors.push(String(e));
-                        continue;
                     }
                 }
                 throw new Error('Не удалось получить данные (' + errors.join(' | ') + ')');
@@ -221,48 +187,62 @@
                 });
             }
             
-            async function initializeApp() {
+            function updateHeaderText(forDate, lastUpdated) {
                 const scheduleDateElem = document.getElementById('scheduleDate');
                 const lastUpdatedElem = document.getElementById('lastUpdated');
+                
+                if (forDate) {
+                    scheduleDateElem.textContent = `Расписание автобусов на: ${forDate}`;
+                } else {
+                    const now = new Date();
+                    const dateString = now.toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit' });
+                    scheduleDateElem.textContent = `Расписание автобусов на: ${dateString}`;
+                }
+                
+                lastUpdatedElem.textContent = lastUpdated;
+            }
+
+            async function initializeApp() {
                 const scheduleContainer = document.getElementById('scheduleContainer');
                 const loader = document.getElementById('loader');
 
                 const now = new Date();
-                const dateString = now.toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit' });
                 const timeString = now.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' });
-                scheduleDateElem.textContent = `Расписание автобусов на: ${dateString}`;
-                lastUpdatedElem.textContent = `Последнее обновление: ${timeString}`;
 
                 try {
-                    // Try local pre-scraped JSON first (no CORS, works on GH Pages without VPN)
                     const local = await fetchLocalSchedule();
-                    if (Array.isArray(local.items) && local.items.length) {
-                        if (local.generatedAt) {
-                            const dt = new Date(local.generatedAt);
-                            lastUpdatedElem.textContent = `Обновлено экшеном: ${dt.toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit' })} ${dt.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' })}`;
-                        }
+                    if (Array.isArray(local.items) && local.items.length > 0) {
+                        const dt = new Date(local.generatedAt);
+                        const updatedText = `Обновлено: ${dt.toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit' })} ${dt.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' })}`;
+                        updateHeaderText(local.forDate, updatedText);
                         setupControls(local.items);
-                        if (loader) loader.classList.add('hidden');
-                        return;
+                    } else {
+                        throw new Error("Local data is empty, trying live fetch");
                     }
-                    // Fallback to live fetchers if local is empty
-                    const scheduleData = await fetchAndParseData();
-                    setupControls(scheduleData);
-                    if (loader) loader.classList.add('hidden');
-                } catch(error) {
-                    console.error("Ошибка загрузки:", error);
+                } catch (error) {
+                    console.warn("Could not load local schedule, falling back to live fetch:", error);
                     try {
-                        const cached = JSON.parse(localStorage.getItem('scheduleCache') || 'null');
-                        if (cached && Array.isArray(cached.data) && cached.data.length) {
-                            const dt = new Date(cached.ts);
-                            lastUpdatedElem.textContent = `Показаны данные из кеша: ${dt.toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit' })} ${dt.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' })}`;
-                            setupControls(cached.data);
-                            if (loader) loader.classList.add('hidden');
-                            return;
+                        const liveData = await fetchAndParseData();
+                        updateHeaderText(liveData.forDate, `Обновлено сейчас: ${timeString}`);
+                        setupControls(liveData.items);
+                    } catch (liveError) {
+                        console.error("Live fetch failed:", liveError);
+                        try {
+                            const cached = JSON.parse(localStorage.getItem('scheduleCache') || 'null');
+                            if (cached && Array.isArray(cached.data) && cached.data.length) {
+                                const dt = new Date(cached.ts);
+                                const cachedUpdatedText = `Показаны данные из кеша: ${dt.toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit' })} ${dt.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' })}`;
+                                updateHeaderText(cached.forDate, cachedUpdatedText);
+                                setupControls(cached.data);
+                            } else {
+                                throw new Error("Cache is also empty");
+                            }
+                        } catch (_) {
+                            updateHeaderText(null, 'Ошибка загрузки данных.');
+                            scheduleContainer.innerHTML = `<div class="error-message">Не удалось загрузить расписание. Источник временно недоступен. Попробуйте обновить страницу позже.</div>`;
                         }
-                    } catch (_) { /* ignore parse errors */ }
-                    lastUpdatedElem.textContent = 'Ошибка загрузки данных.';
-                    scheduleContainer.innerHTML = `<div class="error-message">Не удалось загрузить расписание. Источник временно недоступен. Попробуйте обновить страницу позже.</div>`;
+                    }
+                } finally {
                     if (loader) loader.classList.add('hidden');
                 }
             }

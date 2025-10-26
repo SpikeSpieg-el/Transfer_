@@ -16,18 +16,44 @@ function parseHtml(html) {
   const $ = cheerio.load(html);
   const rows = $('table tr');
   const items = [];
+  
+  let forDate = '';
+  try {
+    const pageText = $('body').text();
+    // Ищем дату в формате ДД.ММ.ГГГГ или ДД.ММ, чтобы установить актуальную дату расписания
+    const dateMatch = pageText.match(/(\d{1,2}\.\d{1,2}(?:\.\d{4})?)/);
+    if (dateMatch) {
+        // Убираем год, если он есть, для краткости
+        forDate = dateMatch[1].replace(/\.\d{4}$/, '');
+    }
+  } catch {}
+
   rows.each((i, el) => {
-    if (i === 0) return; // skip header
+    if (i === 0) return; // Пропускаем заголовок таблицы
     const cells = $(el).find('td');
+    
     if (cells.length >= 2) {
       const time = ($(cells[0]).text() || '').trim();
       const route = ($(cells[1]).text() || '').trim();
       const busesText = ($(cells[2]).text() || '').trim();
-      const description = ($(cells[3]).text() || '').trim();
-      if (!time) return;
-      const sourceText = [busesText, route, description].join(' ');
-      let buses = (sourceText.replace(/[()]/g, ' ').match(/\b\d{1,3}\b/g) || []);
-      buses = Array.from(new Set(buses));
+      
+      // Пропускаем строки без времени или с заголовком
+      if (!time || time.toUpperCase() === 'ВРЕМЯ') return;
+      
+      // Собираем описание из всех последующих ячеек, чтобы ничего не упустить
+      const descriptionParts = [];
+      for (let j = 3; j < cells.length; j++) {
+          const cellText = $(cells[j]).text().trim();
+          if (cellText) {
+              descriptionParts.push(cellText);
+          }
+      }
+      const description = descriptionParts.join('; ');
+      
+      // Улучшенный парсинг номеров автобусов: ищем 3-значные числа
+      let buses = (busesText.match(/\b\d{3}\b/g) || []);
+      buses = Array.from(new Set(buses)); // Убираем дубликаты
+      
       items.push({
         time,
         buses,
@@ -37,20 +63,21 @@ function parseHtml(html) {
       });
     }
   });
-  return items;
+  return { items, forDate };
 }
 
 async function main() {
   try {
     const html = await fetchSource();
-    const items = parseHtml(html);
+    const parsed = parseHtml(html);
     const out = {
       generatedAt: new Date().toISOString(),
-      items
+      forDate: parsed.forDate || '',
+      items: parsed.items
     };
     const outPath = path.join(__dirname, '..', 'data', 'schedule.json');
     fs.writeFileSync(outPath, JSON.stringify(out, null, 2), 'utf8');
-    console.log(`Wrote ${items.length} items to ${outPath}`);
+    console.log(`Wrote ${parsed.items.length} items to ${outPath} for date ${parsed.forDate}`);
   } catch (e) {
     console.error('Scrape failed:', e);
     process.exit(1);
