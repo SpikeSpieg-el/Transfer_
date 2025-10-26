@@ -14,7 +14,10 @@
     <div class="container">
         <header>
             <div class="header-top">
-                <h1 id="scheduleDate" data-i18n="header">Расписание автобусов</h1>
+                <div class="header-title">
+                    <h1 data-i18n="header">Расписание автобусов</h1>
+                    <div id="scheduleDate" class="schedule-date"></div>
+                </div>
                 <div class="header-controls">
                     <button id="refreshBtn" class="icon-btn" aria-label="Refresh data" title="Обновить данные">
                         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -23,6 +26,11 @@
                             <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/>
                         </svg>
                     </button>
+                    <a id="repoLink" class="icon-btn" href="https://github.com/SpikeSpieg-el/Transfer_" aria-label="Open GitHub repository" title="GitHub" target="_blank" rel="noopener noreferrer">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                            <path d="M12 2C6.48 2 2 6.58 2 12.26c0 4.51 2.87 8.33 6.84 9.68.5.09.68-.22.68-.49 0-.24-.01-.87-.01-1.71-2.78.62-3.37-1.36-3.37-1.36-.45-1.18-1.11-1.49-1.11-1.49-.91-.64.07-.63.07-.63 1.01.07 1.54 1.06 1.54 1.06.9 1.58 2.36 1.12 2.94.86.09-.67.35-1.12.64-1.38-2.22-.26-4.56-1.14-4.56-5.08 0-1.12.39-2.03 1.04-2.75-.11-.26-.45-1.31.1-2.73 0 0 .85-.28 2.79 1.05a9.34 9.34 0 0 1 5.08 0c1.94-1.33 2.79-1.05 2.79-1.05.55 1.42.21 2.47.1 2.73.65.72 1.04 1.63 1.04 2.75 0 3.95-2.34 4.82-4.57 5.07.36.32.68.95.68 1.92 0 1.39-.01 2.52-.01 2.86 0 .27.18.59.69.49A10.06 10.06 0 0 0 22 12.26C22 6.58 17.52 2 12 2z"/>
+                        </svg>
+                    </a>
                     <button id="langToggle" class="icon-btn" aria-label="Switch language" title="Switch language">
                         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                             <circle cx="12" cy="12" r="10"/>

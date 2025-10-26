@@ -84,6 +84,18 @@ header h1 {
     margin: 0;
 }
 
+.header-title {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.schedule-date {
+    color: var(--text-secondary);
+    font-size: clamp(0.9rem, 2.5vw, 1.1rem);
+    font-weight: 500;
+}
+
 .header-controls {
     display: flex;
     gap: 8px;

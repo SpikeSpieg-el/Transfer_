@@ -52,6 +52,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
             let currentLang = localStorage.getItem('language') || 'ru';
             let currentTheme = localStorage.getItem('theme') || 'light';
+            let currentScheduleDate = null;
 
             // Apply theme on load
             document.documentElement.setAttribute('data-theme', currentTheme);
@@ -107,6 +108,13 @@ document.addEventListener('DOMContentLoaded', () => {
                 
                 // Update HTML lang attribute
                 document.documentElement.lang = currentLang;
+                
+                // Update schedule date with new language
+                if (currentScheduleDate) {
+                    const scheduleDateElem = document.getElementById('scheduleDate');
+                    const datePrefix = currentLang === 'ru' ? 'на:' : 'for:';
+                    scheduleDateElem.textContent = `${datePrefix} ${currentScheduleDate}`;
+                }
             }
 
             updateLanguage();
@@ -132,6 +140,16 @@ document.addEventListener('DOMContentLoaded', () => {
                 const locale = currentLang === 'ru' ? 'ru-RU' : 'en-US';
                 const scheduleContainer = document.getElementById('scheduleContainer');
                 
+                // Таймер на 10 секунд для показа сообщения об автоматическом обновлении
+                let timeoutReached = false;
+                const timeoutTimer = setTimeout(() => {
+                    timeoutReached = true;
+                    const autoUpdateMsg = currentLang === 'ru' 
+                        ? 'Автоматическое обновление данных каждые 30 минут' 
+                        : 'Automatic data update every 30 minutes';
+                    showNotification(autoUpdateMsg, 'info');
+                }, 10000);
+                
                 try {
                     console.log('🔄 Принудительное обновление данных...');
                     const liveData = await fetchAndParseData();
@@ -147,11 +165,17 @@ document.addEventListener('DOMContentLoaded', () => {
                     
                     console.log('✅ Данные успешно обновлены');
                     
-                    // Показываем уведомление об успехе
-                    showNotification(currentLang === 'ru' ? 'Данные обновлены!' : 'Data updated!', 'success');
+                    // Показываем уведомление об успехе только если не прошло 10 секунд
+                    if (!timeoutReached) {
+                        clearTimeout(timeoutTimer);
+                        showNotification(currentLang === 'ru' ? 'Данные обновлены!' : 'Data updated!', 'success');
+                    }
                 } catch (error) {
                     console.error('❌ Ошибка обновления:', error);
-                    showNotification(currentLang === 'ru' ? 'Ошибка обновления' : 'Update failed', 'error');
+                    clearTimeout(timeoutTimer);
+                    if (!timeoutReached) {
+                        showNotification(currentLang === 'ru' ? 'Ошибка обновления' : 'Update failed', 'error');
+                    }
                 } finally {
                     isRefreshing = false;
                     refreshBtn.classList.remove('rotating');
@@ -377,12 +401,16 @@ document.addEventListener('DOMContentLoaded', () => {
                 const lastUpdatedElem = document.getElementById('lastUpdated');
                 const t = translations[currentLang];
                 
+                const datePrefix = currentLang === 'ru' ? 'на:' : 'for:';
+                
                 if (forDate) {
-                    scheduleDateElem.textContent = `${t.scheduleFor} ${forDate}`;
+                    currentScheduleDate = forDate;
+                    scheduleDateElem.textContent = `${datePrefix} ${forDate}`;
                 } else {
                     const now = new Date();
                     const dateString = now.toLocaleDateString(currentLang === 'ru' ? 'ru-RU' : 'en-US', { day: '2-digit', month: '2-digit' });
-                    scheduleDateElem.textContent = `${t.scheduleFor} ${dateString}`;
+                    currentScheduleDate = dateString;
+                    scheduleDateElem.textContent = `${datePrefix} ${dateString}`;
                 }
                 
                 lastUpdatedElem.textContent = lastUpdated;
