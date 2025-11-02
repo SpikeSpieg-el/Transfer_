@@ -17,13 +17,16 @@ document.addEventListener('DOMContentLoaded', () => {
                     arrival: 'Прибытие',
                     intermediate: 'Промежуточная',
                     description: 'Описание:',
-                    scheduleFor: 'Расписание автобусов на:',
+                    scheduleFor: 'Расписание на:',
                     updated: 'Обновлено:',
                     updatedNow: 'Обновлено сейчас:',
-                    cachedData: 'Показаны данные из кеша:',
+                    cachedData: 'Данные из кеша от:',
                     errorLoading: 'Ошибка загрузки данных.',
                     errorMessage: 'Не удалось загрузить расписание. Источник временно недоступен. Попробуйте обновить страницу позже.',
-                    noRoutes: 'Не удалось найти ни одного маршрута.'
+                    noRoutes: 'Не удалось найти ни одного маршрута.',
+                    currentDay: 'Актуальное',
+                    previousDay: 'За вчера (вечер сегодня)',
+                    archiveNoticeText: 'Вы просматриваете архивное расписание. Данные не обновляются.'
                 },
                 en: {
                     title: 'Shuttle Schedule',
@@ -40,19 +43,30 @@ document.addEventListener('DOMContentLoaded', () => {
                     arrival: 'Arrival',
                     intermediate: 'Stop',
                     description: 'Description:',
-                    scheduleFor: 'Bus schedule for:',
+                    scheduleFor: 'Schedule for:',
                     updated: 'Updated:',
                     updatedNow: 'Updated now:',
-                    cachedData: 'Showing cached data:',
+                    cachedData: 'Cached data from:',
                     errorLoading: 'Error loading data.',
                     errorMessage: 'Failed to load schedule. Source temporarily unavailable. Please try refreshing the page later.',
-                    noRoutes: 'No routes found.'
+                    noRoutes: 'No routes found.',
+                    currentDay: 'Current',
+                    previousDay: 'Previous (evening today)',
+                    archiveNoticeText: 'You are viewing an archived schedule. This data is not updated.'
                 }
             };
 
             let currentLang = localStorage.getItem('language') || 'ru';
             let currentTheme = localStorage.getItem('theme') || 'light';
-            let currentScheduleDate = null;
+            
+            let scheduleData = {
+                current: null, // { ts, forDate, items }
+                previous: null // { ts, forDate, items }
+            };
+            let currentView = 'current'; // 'current' or 'previous'
+            let currentFilteredData = [];
+            let currentSearchTerms = {};
+
 
             // Apply theme on load
             document.documentElement.setAttribute('data-theme', currentTheme);
@@ -88,36 +102,21 @@ document.addEventListener('DOMContentLoaded', () => {
             function updateLanguage() {
                 const t = translations[currentLang];
                 
-                // Update text content
                 document.querySelectorAll('[data-i18n]').forEach(el => {
                     const key = el.getAttribute('data-i18n');
                     if (t[key]) el.textContent = t[key];
                 });
 
-                // Update placeholders
                 document.querySelectorAll('[data-i18n-placeholder]').forEach(el => {
                     const key = el.getAttribute('data-i18n-placeholder');
                     if (t[key]) el.placeholder = t[key];
                 });
 
-                // Update title
                 document.title = t.title;
-                
-                // Update language button text
                 langText.textContent = currentLang === 'ru' ? 'EN' : 'RU';
-                
-                // Update HTML lang attribute
                 document.documentElement.lang = currentLang;
-                
-                // Update schedule date with new language
-                if (currentScheduleDate) {
-                    const scheduleDateElem = document.getElementById('scheduleDate');
-                    const datePrefix = currentLang === 'ru' ? 'на:' : 'for:';
-                    scheduleDateElem.textContent = `${datePrefix} ${currentScheduleDate}`;
-                }
+                updateView(); // Re-render headers and cards with new language
             }
-
-            updateLanguage();
 
             langToggle.addEventListener('click', () => {
                 currentLang = currentLang === 'ru' ? 'en' : 'ru';
@@ -135,47 +134,17 @@ document.addEventListener('DOMContentLoaded', () => {
                 isRefreshing = true;
                 refreshBtn.classList.add('rotating');
                 refreshBtn.disabled = true;
-                
-                const t = translations[currentLang];
-                const locale = currentLang === 'ru' ? 'ru-RU' : 'en-US';
-                const scheduleContainer = document.getElementById('scheduleContainer');
-                
-                // Таймер на 10 секунд для показа сообщения об автоматическом обновлении
-                let timeoutReached = false;
-                const timeoutTimer = setTimeout(() => {
-                    timeoutReached = true;
-                    const autoUpdateMsg = currentLang === 'ru' 
-                        ? 'Автоматическое обновление данных каждые 30 минут' 
-                        : 'Automatic data update every 30 minutes';
-                    showNotification(autoUpdateMsg, 'info');
-                }, 10000);
-                
+
                 try {
                     console.log('🔄 Принудительное обновление данных...');
                     const liveData = await fetchAndParseData();
-                    const timeString = new Date().toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit' });
-                    updateHeaderText(liveData.forDate, `${t.updatedNow} ${timeString}`);
-                    
-                    // Перерендерим карточки с новыми данными
-                    const fromInput = document.getElementById('fromInput');
-                    const toInput = document.getElementById('toInput');
-                    const fromValue = fromInput?.value.toLowerCase().trim() || '';
-                    const toValue = toInput?.value.toLowerCase().trim() || '';
-                    renderCards(liveData.items, { fromValue, toValue });
-                    
+                    handleNewData(liveData);
+                    updateView();
                     console.log('✅ Данные успешно обновлены');
-                    
-                    // Показываем уведомление об успехе только если не прошло 10 секунд
-                    if (!timeoutReached) {
-                        clearTimeout(timeoutTimer);
-                        showNotification(currentLang === 'ru' ? 'Данные обновлены!' : 'Data updated!', 'success');
-                    }
+                    showNotification(translations[currentLang].updatedNow.replace(':', ''), 'success');
                 } catch (error) {
                     console.error('❌ Ошибка обновления:', error);
-                    clearTimeout(timeoutTimer);
-                    if (!timeoutReached) {
-                        showNotification(currentLang === 'ru' ? 'Ошибка обновления' : 'Update failed', 'error');
-                    }
+                    showNotification(translations[currentLang].errorLoading, 'error');
                 } finally {
                     isRefreshing = false;
                     refreshBtn.classList.remove('rotating');
@@ -183,7 +152,6 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
             }
 
-            // Простое уведомление
             function showNotification(message, type = 'info') {
                 const notification = document.createElement('div');
                 notification.className = `notification notification-${type}`;
@@ -210,113 +178,47 @@ document.addEventListener('DOMContentLoaded', () => {
 
             async function fetchAndParseData() {
                 const targetUrl = 'http://3aic.ru/';
-
                 const tryFetchers = [
-                    // Cloudflare Workers CORS Proxy
-                    async () => {
-                        const url = `https://corsproxy.io/?${encodeURIComponent(targetUrl)}`;
-                        const r = await fetch(url, { mode: 'cors', cache: 'no-store' });
-                        if (!r.ok) throw new Error(`corsproxy.io ${r.status}`);
-                        return await r.text();
-                    },
-                    // API CORS Proxy
-                    async () => {
-                        const url = `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(targetUrl)}`;
-                        const r = await fetch(url, { mode: 'cors', cache: 'no-store' });
-                        if (!r.ok) throw new Error(`codetabs ${r.status}`);
-                        return await r.text();
-                    },
-                    // Proxy CORS SH alternative
-                    async () => {
-                        const url = `https://proxy.cors.sh/${targetUrl}`;
-                        const r = await fetch(url, { mode: 'cors', cache: 'no-store' });
-                        if (!r.ok) throw new Error(`proxy.cors.sh ${r.status}`);
-                        return await r.text();
-                    },
-                    // AllOrigins RAW
-                    async () => {
-                        const url = `https://api.allorigins.win/raw?url=${encodeURIComponent(targetUrl)}`;
-                        const r = await fetch(url, { mode: 'cors', cache: 'no-store' });
-                        if (!r.ok) throw new Error(`allorigins-raw ${r.status}`);
-                        return await r.text();
-                    },
-                    // CORS Proxy
-                    async () => {
-                        const url = `https://corsproxy.org/?${encodeURIComponent(targetUrl)}`;
-                        const r = await fetch(url, { mode: 'cors', cache: 'no-store' });
-                        if (!r.ok) throw new Error(`corsproxy.org ${r.status}`);
-                        return await r.text();
-                    }
+                    async () => { const r = await fetch(`https://corsproxy.io/?${encodeURIComponent(targetUrl)}`, { mode: 'cors', cache: 'no-store' }); if (!r.ok) throw new Error(`corsproxy.io ${r.status}`); return await r.text(); },
+                    async () => { const r = await fetch(`https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(targetUrl)}`, { mode: 'cors', cache: 'no-store' }); if (!r.ok) throw new Error(`codetabs ${r.status}`); return await r.text(); },
+                    async () => { const r = await fetch(`https://proxy.cors.sh/${targetUrl.replace(/^https?:\/\//, '')}`, { headers: { 'x-cors-api-key': 'temp_1a2b3c4d5e6f7g8h9i0j' }, mode: 'cors', cache: 'no-store' }); if (!r.ok) throw new Error(`proxy.cors.sh ${r.status}`); return await r.text(); },
+                    async () => { const r = await fetch(`https://api.allorigins.win/raw?url=${encodeURIComponent(targetUrl)}`, { mode: 'cors', cache: 'no-store' }); if (!r.ok) throw new Error(`allorigins-raw ${r.status}`); return await r.text(); },
+                    async () => { const r = await fetch(`https://corsproxy.org/?${encodeURIComponent(targetUrl)}`, { mode: 'cors', cache: 'no-store' }); if (!r.ok) throw new Error(`corsproxy.org ${r.status}`); return await r.text(); }
                 ];
 
                 async function withTimeout(promise, ms) {
-                    return Promise.race([
-                        promise,
-                        new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), ms))
-                    ]);
+                    return Promise.race([ promise, new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), ms)) ]);
                 }
 
-                const errors = [];
                 for (const fetcher of tryFetchers) {
                     try {
                         const text = await withTimeout(fetcher(), 15000);
                         if (!text || text.length <= 100) throw new Error('empty');
 
-                        const scheduleData = [];
-                        const parser = new DOMParser();
-                        const doc = parser.parseFromString(text, 'text/html');
-
-                        // Ищем актуальную дату на странице
+                        const scheduleDataItems = [];
+                        const doc = new DOMParser().parseFromString(text, 'text/html');
                         let forDate = '';
-                        const bodyText = doc.body.textContent || '';
-                        const dateMatch = bodyText.match(/(\d{1,2}\.\d{1,2}(?:\.\d{4})?)/);
-                        if (dateMatch) {
-                            forDate = dateMatch[1].replace(/\.\d{4}$/, '');
-                        }
+                        const dateMatch = (doc.body.textContent || '').match(/(\d{1,2}\.\d{1,2}(?:\.\d{4})?)/);
+                        if (dateMatch) forDate = dateMatch[1].replace(/\.\d{4}$/, '');
                         
-                        const rows = doc.querySelectorAll('table tr');
-                        rows.forEach((row, index) => {
+                        doc.querySelectorAll('table tr').forEach((row, index) => {
                             if (index === 0) return;
                             const cells = row.querySelectorAll('td');
                             if (cells.length >= 2) {
                                 const time = (cells[0]?.textContent || '').trim();
                                 const route = (cells[1]?.textContent || '').trim();
-                                const busesText = (cells[2]?.textContent || '').trim();
-
-                                // Пропускаем строки без времени или с заголовком
                                 if (!time || time.toUpperCase() === 'ВРЕМЯ') return;
-
-                                const descriptionParts = [];
-                                for (let i = 3; i < cells.length; i++) {
-                                    const cellText = (cells[i]?.textContent || '').trim();
-                                    if (cellText) descriptionParts.push(cellText);
-                                }
-                                const description = descriptionParts.join('; ');
-                                
-                                let buses = (busesText.match(/\b\d{3}\b/g) || []);
-                                buses = Array.from(new Set(buses));
-
-                                scheduleData.push({
-                                    time,
-                                    buses,
-                                    route,
-                                    description,
-                                    keywords: `${time} ${buses.join(' ')} ${route} ${description}`.toLowerCase()
-                                });
+                                const busesText = (cells[2]?.textContent || '').trim();
+                                let buses = Array.from(new Set(busesText.match(/\b\d{3}\b/g) || []));
+                                const description = Array.from(cells).slice(3).map(c => c.textContent.trim()).filter(Boolean).join('; ');
+                                scheduleDataItems.push({ time, buses, route, description, keywords: `${time} ${buses.join(' ')} ${route} ${description}`.toLowerCase() });
                             }
                         });
 
-                        if (scheduleData.length) {
-                            try { localStorage.setItem('scheduleCache', JSON.stringify({ ts: Date.now(), data: scheduleData, forDate })); } catch {}
-                            return { items: scheduleData, forDate };
-                        }
-
-                        errors.push('parsed 0 rows');
-                    } catch (e) {
-                        errors.push(String(e));
-                    }
+                        if (scheduleDataItems.length) return { items: scheduleDataItems, forDate };
+                    } catch (e) { console.warn('Fetcher failed:', e.message); }
                 }
-                throw new Error('Не удалось получить данные (' + errors.join(' | ') + ')');
+                throw new Error('All fetchers failed');
             }
 
             function renderCards(data, searchTerms = {}) {
@@ -324,7 +226,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 const t = translations[currentLang];
                 container.innerHTML = '';
                 
-                if (data.length === 0) {
+                if (!data || data.length === 0) {
                      container.innerHTML = `<p class="error-message">${t.noRoutes}</p>`;
                      return;
                 }
@@ -333,32 +235,21 @@ document.addEventListener('DOMContentLoaded', () => {
 
                 data.forEach(item => {
                     const busTags = item.buses.map(bus => `<span class="bus-tag">№ ${bus}</span>`).join('');
-                    
-                    const stops = item.route
-                        .split('→')
-                        .flatMap(part => part.split(' - '))
-                        .map(stop => stop.trim())
-                        .filter(stop => stop);
+                    const stops = item.route.split(/→|\s-\s/).map(s => s.trim()).filter(Boolean);
                     let rowsHTML = '';
+                    
                     stops.forEach((stop, index) => {
-                        const isFirst = index === 0;
-                        const isLast = index === stops.length - 1;
+                        const isFirst = index === 0, isLast = index === stops.length - 1;
                         const label = isFirst ? t.departure : (isLast ? t.arrival : t.intermediate);
                         const iconClass = isFirst ? 'start' : (isLast ? 'end' : 'mid');
-                        const pointClass = isFirst || isLast ? '' : 'is-mid';
-                        const lineHTML = !isLast ? `<div class=\"v-line\"></div>` : '';
-                        
-                        // Проверяем, совпадает ли остановка с поиском
                         const stopLower = stop.toLowerCase();
-                        const isFromMatch = fromValue && stopLower.includes(fromValue);
-                        const isToMatch = toValue && stopLower.includes(toValue);
-                        const highlightClass = isFromMatch || isToMatch ? 'highlighted' : '';
+                        const highlightClass = (fromValue && stopLower.includes(fromValue)) || (toValue && stopLower.includes(toValue)) ? 'highlighted' : '';
                         
                         rowsHTML += `
-                            <div class="stop-row ${pointClass} ${highlightClass}">
+                            <div class="stop-row ${isFirst || isLast ? '' : 'is-mid'} ${highlightClass}">
                                 <div class="stop-visual">
                                     <div class="stop-icon ${iconClass}"></div>
-                                    ${lineHTML}
+                                    ${!isLast ? `<div class="v-line"></div>` : ''}
                                 </div>
                                 <div class="stop-details">
                                     <div class="label">${label}</div>
@@ -366,31 +257,15 @@ document.addEventListener('DOMContentLoaded', () => {
                                 </div>
                             </div>`;
                     });
-                    if (stops.length < 1) {
-                        rowsHTML = `
-                            <div class="stop-row">
-                                <div class="stop-visual">
-                                    <div class="stop-icon start"></div>
-                                </div>
-                                <div class="stop-details">
-                                    <div class="location">${item.route}</div>
-                                </div>
-                            </div>`;
-                    }
-
+                    
                     const cardHTML = `
-                        <article class="route-card" data-time="${item.time}" data-bus="${item.buses[0] || ''}" data-route="${item.route.toLowerCase()}" data-keywords="${item.keywords}">
-                            <div class="card-header">
+                        <article class="route-card" data-time="${item.time}" data-bus="${item.buses[0] || ''}" data-keywords="${item.keywords}">
+                            <header class="card-header">
                                 <span class="time">${item.time}</span>
-                                <div class="bus-list">${busTags.length > 0 ? busTags : ''}</div>
-                            </div>
-
+                                <div class="bus-list">${busTags}</div>
+                            </header>
                             <div class="route-path">${rowsHTML}</div>
-
-                            ${item.description ? `
-                            <div class="card-footer">
-                                <p><span class="label">${t.description}</span> ${item.description}</p>
-                            </div>` : ''}
+                            ${item.description ? `<footer class="card-footer"><p><span class="label">${t.description}</span> ${item.description}</p></footer>` : ''}
                         </article>`;
                     container.insertAdjacentHTML('beforeend', cardHTML);
                 });
@@ -400,174 +275,164 @@ document.addEventListener('DOMContentLoaded', () => {
                 const scheduleDateElem = document.getElementById('scheduleDate');
                 const lastUpdatedElem = document.getElementById('lastUpdated');
                 const t = translations[currentLang];
+                const datePrefix = t.scheduleFor;
                 
-                const datePrefix = currentLang === 'ru' ? 'на:' : 'for:';
-                
-                if (forDate) {
-                    currentScheduleDate = forDate;
-                    scheduleDateElem.textContent = `${datePrefix} ${forDate}`;
-                } else {
-                    const now = new Date();
-                    const dateString = now.toLocaleDateString(currentLang === 'ru' ? 'ru-RU' : 'en-US', { day: '2-digit', month: '2-digit' });
-                    currentScheduleDate = dateString;
-                    scheduleDateElem.textContent = `${datePrefix} ${dateString}`;
-                }
-                
+                scheduleDateElem.textContent = `${datePrefix} ${forDate || new Date().toLocaleDateString(currentLang === 'ru' ? 'ru-RU' : 'en-US', { day: '2-digit', month: '2-digit' })}`;
                 lastUpdatedElem.textContent = lastUpdated;
             }
 
-            // Проверка актуальности данных
             function isDataStale(generatedAt, forDate) {
                 if (!generatedAt) return true;
-                
-                const now = new Date();
-                const generated = new Date(generatedAt);
-                const hoursSinceUpdate = (now - generated) / (1000 * 60 * 60);
-                
-                // Данные устарели если:
-                // 1. Прошло больше 15 часов с момента обновления
-                if (hoursSinceUpdate > 15) return true;
-                
-                // 2. Дата в расписании не совпадает с сегодняшней или завтрашней
+                if ((new Date() - new Date(generatedAt)) / (1000 * 60 * 60) > 15) return true;
                 if (forDate) {
                     const [day, month] = forDate.split('.').map(Number);
+                    const now = new Date();
                     const scheduleDate = new Date(now.getFullYear(), month - 1, day);
                     const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-                    const tomorrow = new Date(today);
-                    tomorrow.setDate(tomorrow.getDate() + 1);
-                    
-                    // Если дата расписания не сегодня и не завтра - данные устарели
-                    if (scheduleDate < today || scheduleDate > tomorrow) return true;
+                    const tomorrow = new Date(today); tomorrow.setDate(tomorrow.getDate() + 1);
+                    if (scheduleDate.getTime() < today.getTime() || scheduleDate.getTime() > tomorrow.getTime()) return true;
                 }
-                
                 return false;
             }
 
+            function handleNewData(newData) {
+                const currentCache = scheduleData.current;
+                if (currentCache && currentCache.forDate && newData.forDate && newData.forDate !== currentCache.forDate) {
+                    if (!scheduleData.previous || scheduleData.previous.forDate !== currentCache.forDate) {
+                        console.log(`Archiving schedule for ${currentCache.forDate}.`);
+                        localStorage.setItem('previousScheduleCache', JSON.stringify(currentCache));
+                        scheduleData.previous = currentCache;
+                    }
+                }
+                const newCacheEntry = { ts: Date.now(), forDate: newData.forDate, items: newData.items };
+                localStorage.setItem('scheduleCache', JSON.stringify(newCacheEntry));
+                scheduleData.current = newCacheEntry;
+            }
+
             async function initializeApp() {
-                const scheduleContainer = document.getElementById('scheduleContainer');
-                const loader = document.getElementById('loader');
-                const t = translations[currentLang];
-                const locale = currentLang === 'ru' ? 'ru-RU' : 'en-US';
-
-                const now = new Date();
-                const timeString = now.toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit' });
-
+                scheduleData.current = JSON.parse(localStorage.getItem('scheduleCache') || 'null');
+                scheduleData.previous = JSON.parse(localStorage.getItem('previousScheduleCache') || 'null');
+                
                 try {
                     const local = await fetchLocalSchedule();
-                    
-                    // Проверка актуальности данных
-                    const dataIsStale = isDataStale(local.generatedAt, local.forDate);
-                    
-                    if (Array.isArray(local.items) && local.items.length > 0 && !dataIsStale) {
-                        // Данные актуальны, используем их
-                        const dt = new Date(local.generatedAt);
-                        const updatedText = `${t.updated} ${dt.toLocaleDateString(locale, { day: '2-digit', month: '2-digit' })} ${dt.toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit' })}`;
-                        updateHeaderText(local.forDate, updatedText);
-                        setupControls(local.items);
-                        
-                        console.log('✅ Используются актуальные локальные данные');
+                    if (!isDataStale(local.generatedAt, local.forDate)) {
+                        handleNewData({ forDate: local.forDate, items: local.items });
+                        console.log('✅ Using fresh local data');
                     } else {
-                        // Данные устарели или пусты
-                        if (dataIsStale) {
-                            console.warn('⚠️ Локальные данные устарели, обновляем...');
-                        }
-                        throw new Error("Local data is stale or empty, trying live fetch");
+                        throw new Error("Local data is stale");
                     }
-                } catch (error) {
-                    console.warn("Could not load local schedule, falling back to live fetch:", error);
+                } catch (e) {
+                    console.warn(`Could not use local data (${e.message}), trying live fetch...`);
                     try {
                         const liveData = await fetchAndParseData();
-                        updateHeaderText(liveData.forDate, `${t.updatedNow} ${timeString}`);
-                        setupControls(liveData.items);
-                        console.log('✅ Загружены свежие данные с сервера');
+                        handleNewData(liveData);
+                        console.log('✅ Fetched fresh data from server');
                     } catch (liveError) {
-                        console.error("Live fetch failed:", liveError);
-                        try {
-                            const cached = JSON.parse(localStorage.getItem('scheduleCache') || 'null');
-                            if (cached && Array.isArray(cached.data) && cached.data.length) {
-                                const dt = new Date(cached.ts);
-                                const cachedUpdatedText = `${t.cachedData} ${dt.toLocaleDateString(locale, { day: '2-digit', month: '2-digit' })} ${dt.toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit' })}`;
-                                updateHeaderText(cached.forDate, cachedUpdatedText);
-                                setupControls(cached.data);
-                                console.log('⚠️ Используются данные из кеша браузера');
-                            } else {
-                                throw new Error("Cache is also empty");
-                            }
-                        } catch (_) {
+                        console.error(`Live fetch failed: ${liveError.message}`);
+                        if (!scheduleData.current) {
+                            const t = translations[currentLang];
                             updateHeaderText(null, t.errorLoading);
-                            scheduleContainer.innerHTML = `<div class="error-message">${t.errorMessage}</div>`;
-                            console.error('❌ Не удалось загрузить данные из всех источников');
+                            document.getElementById('scheduleContainer').innerHTML = `<div class="error-message">${t.errorMessage}</div>`;
+                            document.getElementById('loader').classList.add('hidden');
+                            return;
                         }
+                        console.log('⚠️ Using stale data from cache');
                     }
-                } finally {
-                    if (loader) loader.classList.add('hidden');
                 }
+                setupControls();
+                updateView();
+                document.getElementById('loader').classList.add('hidden');
             }
             
-            function setupControls(data) {
-                const fromInput = document.getElementById('fromInput');
-                const toInput = document.getElementById('toInput');
-                const generalFilter = document.getElementById('generalFilter');
-                const sortByTimeBtn = document.getElementById('sortByTimeBtn');
-                const sortByBusBtn = document.getElementById('sortByBusBtn');
-                let currentData = [...data];
-                let currentSearchTerms = {};
+            function updateView() {
+                const t = translations[currentLang];
+                const locale = currentLang === 'ru' ? 'ru-RU' : 'en-US';
+                const dataToShow = scheduleData[currentView];
+                
+                const currentDayBtn = document.getElementById('currentDayBtn');
+                const previousDayBtn = document.getElementById('previousDayBtn');
+                const archiveNotice = document.getElementById('archiveNotice');
+                
+                previousDayBtn.disabled = !scheduleData.previous;
+                currentDayBtn.classList.toggle('active', currentView === 'current');
+                previousDayBtn.classList.toggle('active', currentView === 'previous');
+                archiveNotice.classList.toggle('visible', currentView === 'previous');
 
-                function applyFilters() {
-                    const fromValue = fromInput.value.toLowerCase().trim();
-                    const toValue = toInput.value.toLowerCase().trim();
-                    const generalValue = generalFilter.value.toLowerCase().trim();
-                    
-                    // Сохраняем поисковые термины для подсветки
-                    currentSearchTerms = { fromValue, toValue };
-                    
-                    const filteredData = data.filter(item => {
-                        const route = item.route.toLowerCase();
-                        const keywords = item.keywords;
-                        if (generalValue && !keywords.includes(generalValue)) return false;
+                if (!dataToShow || !dataToShow.items) {
+                    document.getElementById('scheduleContainer').innerHTML = `<p class="error-message">${t.noRoutes}</p>`;
+                    updateHeaderText(null, '');
+                    return;
+                }
 
-                        const stops = route.split(/→| - /).map(s => s.trim());
-                        const fromIndex = stops.findIndex(s => s.includes(fromValue));
-                        if (fromValue && fromIndex === -1) return false;
-                        
-                        const toIndex = stops.findIndex(s => s.includes(toValue));
-                        if (toValue) {
-                            if (toIndex === -1) return false;
-                            if (fromValue && toIndex <= fromIndex) return false;
-                        }
-                        return true;
-                    });
-                    
-                    currentData = filteredData;
+                const dt = new Date(dataToShow.ts);
+                const dateStr = dt.toLocaleDateString(locale, { day: '2-digit', month: '2-digit' });
+                const timeStr = dt.toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit' });
+                const updatedText = `${currentView === 'current' ? t.updated : t.cachedData} ${dateStr} ${timeStr}`;
+                updateHeaderText(dataToShow.forDate, updatedText);
+                
+                applyFiltersAndSort();
+            }
+
+            function applyFiltersAndSort() {
+                const activeDataSet = scheduleData[currentView];
+                if (!activeDataSet || !activeDataSet.items) {
+                    renderCards([]);
+                    return;
+                }
+
+                const fromValue = document.getElementById('fromInput').value.toLowerCase().trim();
+                const toValue = document.getElementById('toInput').value.toLowerCase().trim();
+                const generalValue = document.getElementById('generalFilter').value.toLowerCase().trim();
+                currentSearchTerms = { fromValue, toValue };
+
+                currentFilteredData = activeDataSet.items.filter(item => {
+                    if (generalValue && !item.keywords.includes(generalValue)) return false;
+                    const stops = item.route.toLowerCase().split(/→|\s-\s/).map(s => s.trim());
+                    const fromIndex = stops.findIndex(s => s.includes(fromValue));
+                    if (fromValue && fromIndex === -1) return false;
+                    const toIndex = stops.findIndex(s => s.includes(toValue));
+                    if (toValue && (toIndex === -1 || (fromValue && toIndex <= fromIndex))) return false;
+                    return true;
+                });
+                sortAndRender();
+            }
+
+            function sortAndRender() {
+                const activeSort = document.getElementById('sortByTimeBtn').classList.contains('active') ? 'time' : 'bus';
+                if (activeSort === 'time') {
+                    currentFilteredData.sort((a, b) => a.time.localeCompare(b.time, 'kn', { numeric: true }));
+                } else {
+                    currentFilteredData.sort((a, b) => (parseInt(a.buses[0]) || 9999) - (parseInt(b.buses[0]) || 9999));
+                }
+                renderCards(currentFilteredData, currentSearchTerms);
+            }
+
+            function setupControls() {
+                ['fromInput', 'toInput', 'generalFilter'].forEach(id => {
+                    document.getElementById(id).addEventListener('input', applyFiltersAndSort);
+                });
+                
+                document.getElementById('sortByTimeBtn').addEventListener('click', (e) => {
+                    e.currentTarget.classList.add('active');
+                    document.getElementById('sortByBusBtn').classList.remove('active');
                     sortAndRender();
-                }
-
-                function sortAndRender(criteria) {
-                    const activeSort = criteria || (sortByTimeBtn.classList.contains('active') ? 'time' : 'bus');
-
-                    if (activeSort === 'time') {
-                        currentData.sort((a, b) => a.time.localeCompare(b.time, 'kn', { numeric: true }));
-                    } else if (activeSort === 'bus') {
-                        currentData.sort((a, b) => (parseInt(a.buses[0]) || 9999) - (parseInt(b.buses[0]) || 9999));
-                    }
-                    renderCards(currentData, currentSearchTerms);
-                }
-                
-                [fromInput, toInput, generalFilter].forEach(input => input.addEventListener('input', applyFilters));
-                
-                sortByTimeBtn.addEventListener('click', () => {
-                    sortByTimeBtn.classList.add('active');
-                    sortByBusBtn.classList.remove('active');
-                    sortAndRender('time');
+                });
+                document.getElementById('sortByBusBtn').addEventListener('click', (e) => {
+                    e.currentTarget.classList.add('active');
+                    document.getElementById('sortByTimeBtn').classList.remove('active');
+                    sortAndRender();
                 });
 
-                sortByBusBtn.addEventListener('click', () => {
-                    sortByBusBtn.classList.add('active');
-                    sortByTimeBtn.classList.remove('active');
-                    sortAndRender('bus');
+                document.getElementById('currentDayBtn').addEventListener('click', () => {
+                    if (currentView === 'current') return;
+                    currentView = 'current';
+                    updateView();
                 });
-                
-                applyFilters();
+                document.getElementById('previousDayBtn').addEventListener('click', () => {
+                    if (currentView === 'previous' || !scheduleData.previous) return;
+                    currentView = 'previous';
+                    updateView();
+                });
             }
 
             initializeApp();
