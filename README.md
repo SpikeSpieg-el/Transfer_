@@ -5,7 +5,9 @@
 ![Version](https://img.shields.io/badge/version-1.0.0-blue.svg)
 ![License](https://img.shields.io/badge/license-MIT-green.svg)
 
-**[Ссылка на сайт](https://spikespieg-el.github.io/Transfer_/)**
+**[Ссылка на улучшенный сайт](https://spikespieg-el.github.io/Transfer_/)**
+
+**[Оригинальный информационный сайт](http://3aic.ru/)**
 
 ## ✨ Возможности
 

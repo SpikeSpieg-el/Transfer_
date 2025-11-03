@@ -26,7 +26,8 @@ document.addEventListener('DOMContentLoaded', () => {
                     noRoutes: 'Не удалось найти ни одного маршрута.',
                     currentDay: 'Актуальное',
                     previousDay: 'За вчера (вечер сегодня)',
-                    archiveNoticeText: 'Вы просматриваете архивное расписание. Данные не обновляются.'
+                    archiveNoticeText: 'Вы просматриваете архивное расписание. Данные не обновляются.',
+                    hidePast: 'Скрыть прошедшие'
                 },
                 en: {
                     title: 'Shuttle Schedule',
@@ -52,7 +53,8 @@ document.addEventListener('DOMContentLoaded', () => {
                     noRoutes: 'No routes found.',
                     currentDay: 'Current',
                     previousDay: 'Previous (evening today)',
-                    archiveNoticeText: 'You are viewing an archived schedule. This data is not updated.'
+                    archiveNoticeText: 'You are viewing an archived schedule. This data is not updated.',
+                    hidePast: 'Hide past routes'
                 }
             };
 
@@ -353,6 +355,15 @@ document.addEventListener('DOMContentLoaded', () => {
                 const previousDayBtn = document.getElementById('previousDayBtn');
                 const archiveNotice = document.getElementById('archiveNotice');
                 
+                const hidePastToggle = document.getElementById('hidePastToggle');
+    
+                if (currentView === 'previous') {
+                    hidePastToggle.disabled = true;
+                    hidePastToggle.checked = false; // Сбрасываем состояние при переключении
+                } else {
+                    hidePastToggle.disabled = false;
+                }
+
                 previousDayBtn.disabled = !scheduleData.previous;
                 currentDayBtn.classList.toggle('active', currentView === 'current');
                 previousDayBtn.classList.toggle('active', currentView === 'previous');
@@ -383,6 +394,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 const fromValue = document.getElementById('fromInput').value.toLowerCase().trim();
                 const toValue = document.getElementById('toInput').value.toLowerCase().trim();
                 const generalValue = document.getElementById('generalFilter').value.toLowerCase().trim();
+                const hidePast = document.getElementById('hidePastToggle').checked;
                 currentSearchTerms = { fromValue, toValue };
 
                 currentFilteredData = activeDataSet.items.filter(item => {
@@ -392,6 +404,22 @@ document.addEventListener('DOMContentLoaded', () => {
                     if (fromValue && fromIndex === -1) return false;
                     const toIndex = stops.findIndex(s => s.includes(toValue));
                     if (toValue && (toIndex === -1 || (fromValue && toIndex <= fromIndex))) return false;
+                    if (hidePast && currentView === 'current') {
+            const now = new Date();
+            const [hours, minutes] = item.time.split(':').map(Number);
+            
+            // Если время не является числовым (например, "по набору"), не скрываем
+            if (isNaN(hours) || isNaN(minutes)) {
+                return true;
+            }
+            
+            const routeDate = new Date();
+            routeDate.setHours(hours, minutes, 0, 0); // Устанавливаем время рейса на сегодня
+            
+            if (routeDate < now) {
+                return false; // Рейс уже прошел, скрываем его
+            }
+        }
                     return true;
                 });
                 sortAndRender();
@@ -411,6 +439,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 ['fromInput', 'toInput', 'generalFilter'].forEach(id => {
                     document.getElementById(id).addEventListener('input', applyFiltersAndSort);
                 });
+                document.getElementById('hidePastToggle').addEventListener('change', applyFiltersAndSort);
                 
                 document.getElementById('sortByTimeBtn').addEventListener('click', (e) => {
                     e.currentTarget.classList.add('active');

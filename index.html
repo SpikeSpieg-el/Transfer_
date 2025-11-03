@@ -1,24 +1,32 @@
 <!DOCTYPE html>
+<!-- Подключение HTML -->
 <html lang="ru">
 <head>
 <meta charset="UTF-8">
+<!-- Подключение viewport -->
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title data-i18n="title">Расписание Вахт</title>
 <link rel="icon" type="image/png" href="favicon.png">
+<!-- Подключение Google Fonts и preconnect -->
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<!-- Подключение стилей -->
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
 <div class="container">
     <header>
+        <!-- Верхняя часть заголовка -->
         <div class="header-top">
             <div class="header-title">
                 <h1 data-i18n="header">Расписание автобусов</h1>
+                <!-- Дата расписания -->
                 <div id="scheduleDate" class="schedule-date"></div>
             </div>
+            <!-- Кнопки управления -->
             <div class="header-controls">
+                <!-- Обновление данных -->
                 <button id="refreshBtn" class="icon-btn" aria-label="Refresh data" title="Обновить данные">
                     <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                         <polyline points="23 4 23 10 17 10"/>
@@ -31,6 +39,7 @@
                         <path d="M12 2C6.48 2 2 6.58 2 12.26c0 4.51 2.87 8.33 6.84 9.68.5.09.68-.22.68-.49 0-.24-.01-.87-.01-1.71-2.78.62-3.37-1.36-3.37-1.36-.45-1.18-1.11-1.49-1.11-1.49-.91-.64.07-.63.07-.63 1.01.07 1.54 1.06 1.54 1.06.9 1.58 2.36 1.12 2.94.86.09-.67.35-1.12.64-1.38-2.22-.26-4.56-1.14-4.56-5.08 0-1.12.39-2.03 1.04-2.75-.11-.26-.45-1.31.1-2.73 0 0 .85-.28 2.79 1.05a9.34 9.34 0 0 1 5.08 0c1.94-1.33 2.79-1.05 2.79-1.05.55 1.42.21 2.47.1 2.73.65.72 1.04 1.63 1.04 2.75 0 3.95-2.34 4.82-4.57 5.07.36.32.68.95.68 1.92 0 1.39-.01 2.52-.01 2.86 0 .27.18.59.69.49A10.06 10.06 0 0 0 22 12.26C22 6.58 17.52 2 12 2z"/>
                     </svg>
                 </a>-->
+                <!-- Переключатель языка -->
                 <button id="langToggle" class="icon-btn" aria-label="Switch language" title="Switch language">
                     <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                         <circle cx="12" cy="12" r="10"/>
@@ -38,7 +47,9 @@
                     </svg>
                     <span id="langText">EN</span>
                 </button>
+                <!-- Переключатель темы -->
                 <button id="themeToggle" class="icon-btn" aria-label="Toggle theme" title="Toggle theme">
+                    <!-- Солнце -->
                     <svg id="sunIcon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                         <circle cx="12" cy="12" r="5"/>
                         <line x1="12" y1="1" x2="12" y2="3"/>
@@ -50,12 +61,14 @@
                         <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/>
                         <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/>
                     </svg>
+                    <!-- Луна -->
                     <svg id="moonIcon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="display: none;">
                         <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>
                     </svg>
                 </button>
             </div>
         </div>
+        <!-- Выбор даты -->
         <div class="view-selector">
             <div class="date-toggle">
                 <button id="currentDayBtn" class="date-toggle-btn active" data-i18n="currentDay">Актуальное</button>
@@ -63,29 +76,45 @@
             </div>
             <p id="lastUpdated" data-i18n="loading">Загрузка данных...</p>
         </div>
+        <!-- Уведомление об архиве -->
         <div id="archiveNotice" class="archive-notice" data-i18n="archiveNoticeText">Вы просматриваете архивное расписание. Данные не обновляются.</div>
     </header>
-
+    <!-- Экран загрузки -->
     <div id="loader" class="loader-overlay" aria-live="polite" aria-busy="true">
         <div class="spinner"></div>
         <div class="loader-text" data-i18n="loadingText">Загружаем расписание…</div>
     </div>
-
+    <!-- Кнопки фильтрации -->
     <div class="controls">
         <div class="filters">
             <input type="text" id="fromInput" placeholder="Откуда..." data-i18n-placeholder="fromPlaceholder">
             <input type="text" id="toInput" placeholder="Куда..." data-i18n-placeholder="toPlaceholder">
             <input type="text" id="generalFilter" class="filter-full-width" placeholder="Номер автобуса, описание..." data-i18n-placeholder="searchPlaceholder">
         </div>
-        <div class="sorting">
-            <span data-i18n="sortLabel">Сортировать:</span>
-            <button id="sortByTimeBtn" class="active" data-i18n="sortTime">По времени</button>
-            <button id="sortByBusBtn" data-i18n="sortBus">По номеру автобуса</button>
+
+        <!-- Обертка для опций отображения -->
+        <div class="view-options">
+            <div class="sorting">
+                <span data-i18n="sortLabel">Сортировать:</span>
+                <div class="sort-buttons">
+                <button id="sortByTimeBtn" class="active" data-i18n="sortTime">По времени</button>
+                <button id="sortByBusBtn" data-i18n="sortBus">По номеру автобуса</button>
+                </div>
+            </div>
+
+            <!-- Переключатель -->
+            <div class="hide-past-control">
+                <span class="label-text" data-i18n="hidePast">Скрыть прошедшие</span>
+                <label class="switch">
+                    <input type="checkbox" id="hidePastToggle">
+                    <span class="slider"></span>
+                </label>
+            </div>
         </div>
     </div>
-
+    <!-- Расписание -->
     <main id="scheduleContainer"></main>
-
+    <!-- Скрипты -->
     <script src="scripts/script.js"></script>
 
 </div>
