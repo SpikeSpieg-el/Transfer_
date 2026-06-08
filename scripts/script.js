@@ -139,10 +139,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
                 try {
                     console.log('🔄 Принудительное обновление данных...');
-                    const liveData = await fetchAndParseData();
-                    handleNewData(liveData);
+                    const localData = await fetchLocalSchedule();
+                    handleNewData(localData);
                     updateView();
-                    console.log('✅ Данные успешно обновлены');
+                    console.log('✅ Данные обновлены из локального файла (портфолио-режим)');
                     showNotification(translations[currentLang].updatedNow.replace(':', ''), 'success');
                 } catch (error) {
                     console.error('❌ Ошибка обновления:', error);
@@ -317,29 +317,20 @@ document.addEventListener('DOMContentLoaded', () => {
                 
                 try {
                     const local = await fetchLocalSchedule();
-                    if (!isDataStale(local.generatedAt, local.forDate)) {
-                        handleNewData({ forDate: local.forDate, items: local.items });
-                        console.log('✅ Using fresh local data');
-                    } else {
-                        throw new Error("Local data is stale");
-                    }
+                    // Static portfolio mode: always use local data, skip live fetch
+                    // Source http://3aic.ru/ is permanently unavailable
+                    handleNewData({ forDate: local.forDate, items: local.items });
+                    console.log('✅ Using local static data (portfolio mode)');
                 } catch (e) {
-                    console.warn(`Could not use local data (${e.message}), trying live fetch...`);
-                    try {
-                        const liveData = await fetchAndParseData();
-                        handleNewData(liveData);
-                        console.log('✅ Fetched fresh data from server');
-                    } catch (liveError) {
-                        console.error(`Live fetch failed: ${liveError.message}`);
-                        if (!scheduleData.current) {
-                            const t = translations[currentLang];
-                            updateHeaderText(null, t.errorLoading);
-                            document.getElementById('scheduleContainer').innerHTML = `<div class="error-message">${t.errorMessage}</div>`;
-                            document.getElementById('loader').classList.add('hidden');
-                            return;
-                        }
-                        console.log('⚠️ Using stale data from cache');
+                    console.error(`Local data load failed: ${e.message}`);
+                    if (!scheduleData.current) {
+                        const t = translations[currentLang];
+                        updateHeaderText(null, t.errorLoading);
+                        document.getElementById('scheduleContainer').innerHTML = `<div class="error-message">${t.errorMessage}</div>`;
+                        document.getElementById('loader').classList.add('hidden');
+                        return;
                     }
+                    console.log('⚠️ Using stale cached data');
                 }
                 setupControls();
                 updateView();
