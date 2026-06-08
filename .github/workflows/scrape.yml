@@ -2,8 +2,10 @@ name: Scrape Schedule
 
 on:
   workflow_dispatch: {}
-  schedule:
-    - cron: '*/30 * * * *'
+  # schedule disabled 2026-06-09: source http://3aic.ru/ is permanently unavailable
+  # project preserved as static portfolio demo with frozen data
+  # schedule:
+  #   - cron: '*/30 * * * *'
 
 permissions:
   contents: write
